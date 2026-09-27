@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Location Wrapped"
+description = "A mobile-first personal location-history app with privacy-first onboarding, in-session location tracking, demo places, map, and Wrapped preview."
+version = "1.0.0"
+id = "artifacts/location-wrapped"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22308
+
+[services.development]
+run = "pnpm --filter @workspace/location-wrapped run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/location-wrapped", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/location-wrapped/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22308"
+BASE_PATH = "/"

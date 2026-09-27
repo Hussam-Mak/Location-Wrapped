@@ -1,15 +1,16 @@
-# [Project name]
+# Location Wrapped
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A mobile-first personal location-history app that begins recording when the visitor grants browser location access, with a separate sample experience.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/location-wrapped run dev` — run the web app through its managed workflow
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- The Wave 1 web app is frontend-only and does not require a database connection. The template API server has its own database dependency.
 
 ## Stack
 
@@ -22,23 +23,30 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/location-wrapped/src/App.tsx` — screens, navigation, and reusable UI patterns
+- `artifacts/location-wrapped/src/index.css` — visual styles and responsive behavior
+- `artifacts/location-wrapped/src/services/` — browser tracking, demo locations, and future processing boundaries
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Wave 1 stores raw location readings only in this browser; it does not send coordinates to a server.
+- Browser geolocation watches operate only while the page is open. Do not present this as continuous background tracking.
+- Demo places and statistics are illustrative and must not be shown as the visitor's real history. Real place inference and Wrapped generation are deferred.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Visitors can onboard, request location permission, pause/resume recording, remove their saved coordinates, or explore a separate demo dashboard, schematic map, and three-card Wrapped preview.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep core screens restrained, dark, and map-focused; use expressive gradients mainly in landing/onboarding and Wrapped.
+- Preserve the 8px spacing rhythm, 16px mobile page gutters, consistent card radius, and reusable patterns.
+- Wave 1 excludes Google Timeline import, family tracking, social features, payments, AI chat, and leaderboards.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Geolocation requires a secure context and user permission; denial is a normal, recoverable state.
+- Coordinates are not automatically converted into named places in Wave 1.
 
 ## Pointers
 

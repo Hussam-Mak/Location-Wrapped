@@ -1,0 +1,355 @@
+Build a polished mobile-first web application called **Location Wrapped**.
+
+## Product concept
+
+Location Wrapped is a personal location-history app inspired by the storytelling style of Spotify Wrapped.
+
+Instead of requiring users to import old location history, the app begins building their history from the moment they enable location tracking.
+
+The full product flow is:
+
+Onboarding → Enable Location Tracking → Collect Location Data → Process Visits → Dashboard → Map → Wrapped → Share
+
+We will build this incrementally.
+
+For this step, implement **Wave 1 only: product foundation, visual design, onboarding, navigation, and location permission flow.**
+
+Do not implement the entire backend or Wrapped system yet.
+
+## Design direction
+
+Use a **Vibrant Wrapped** visual theme.
+
+The app should feel:
+- bold
+- playful
+- modern
+- highly visual
+- personal
+- polished
+- mobile-first
+
+Do not make it look like a corporate analytics dashboard.
+
+Use:
+- oversized typography
+- colorful gradients
+- dark backgrounds
+- rounded cards
+- abstract shapes used sparingly
+- subtle animations
+- large statistics
+- smooth mobile interactions
+
+Suggested palette:
+
+- Deep navy: `#0B0B14`
+- Electric purple: `#7C3AED`
+- Hot pink: `#EC4899`
+- Bright orange: `#F97316`
+- Electric blue: `#2563EB`
+- Lime: `#A3E635`
+- Off-white: `#F8FAFC`
+
+Use Space Grotesk, Inter, or another modern geometric sans-serif font.
+
+## Design system rules
+
+The interface should feel intentionally designed and consistent rather than like a collection of AI-generated components.
+
+Follow these rules throughout the app:
+
+- Use an **8px spacing system**.
+- Use **16px horizontal page padding** on mobile.
+- Use one primary card radius consistently throughout the app.
+- Use a limited number of card styles and reuse them.
+- Reuse the same button, header, card, and navigation patterns across screens.
+- Prefer typography, spacing, hierarchy, and composition over decorative effects.
+- Keep shadows subtle.
+- Avoid unnecessary borders.
+- Avoid excessive glassmorphism.
+- Avoid gradient borders.
+- Do not put gradients on every card.
+- Reserve strong gradients for hero sections, onboarding moments, and Wrapped screens.
+- Limit each normal app screen to one dominant accent color.
+- Avoid random decorative blobs, floating shapes, or ornaments unless they serve the composition.
+- Avoid excessive emoji in the interface.
+- Avoid overly rounded elements everywhere.
+- Avoid creating unique one-off components when an existing component can be reused.
+- Keep icon style consistent across the entire app.
+- Keep typography scale consistent across screens.
+- Maintain consistent header spacing and vertical rhythm.
+- Do not overcrowd screens with cards.
+- Use whitespace intentionally.
+- Do not make every metric its own tiny card.
+- Use large, editorial statistics when a number is important.
+- Normal app screens should feel restrained and refined.
+- The Wrapped experience can be more expressive, colorful, and experimental.
+
+The product should have two related visual modes:
+
+**Core app**
+- clean
+- refined
+- dark
+- map-focused
+- calm
+- structured
+
+**Wrapped experience**
+- bold
+- editorial
+- colorful
+- animated
+- expressive
+
+Both should clearly belong to the same product.
+
+## Landing page
+
+Create a visually striking landing page.
+
+Main copy:
+
+**Your year. Your places. Your story.**
+
+Supporting copy:
+
+Location Wrapped remembers the places you go and turns your year into a story.
+
+Primary button:
+
+**Start My Wrapped**
+
+Secondary button:
+
+**Try Demo**
+
+Keep the landing screen visually simple. Do not fill it with unnecessary cards or feature grids.
+
+## Onboarding
+
+After tapping Start My Wrapped, guide the user through a short onboarding experience.
+
+### Screen 1
+
+**Your year starts here**
+
+Location Wrapped records the places you visit so you can look back on where your year took you.
+
+### Screen 2
+
+**Built around your privacy**
+
+Explain clearly that location tracking requires permission and that users can stop tracking or delete their data.
+
+### Screen 3
+
+**Enable Location Tracking**
+
+Button:
+
+**Allow Location Access**
+
+Use the browser Geolocation API to request permission.
+
+If permission is denied, show a friendly recovery state explaining how to enable it later.
+
+Never show raw browser errors.
+
+## Tracking status
+
+Once permission is granted, show:
+
+**You're tracking**
+
+Supporting text:
+
+Your Location Wrapped starts building from here.
+
+Create a tracking status component showing:
+
+- Tracking active/inactive
+- Last location recorded
+- Last update time
+
+For Wave 1, location collection can be basic and mostly frontend-focused.
+
+## Navigation
+
+Create a mobile bottom navigation bar with:
+
+- Home
+- Map
+- Wrapped
+- Profile
+
+The navigation should be visually simple and consistent.
+
+Do not use oversized floating navigation elements or excessive effects.
+
+## Home page
+
+Use demo data for now.
+
+Show a prominent tracking status section.
+
+Example:
+
+**Tracking is active**
+
+Last update: 2 minutes ago
+
+Then show sample statistics such as:
+
+- Places visited
+- Days tracked
+- Distance traveled
+- Most visited place
+- Most active day
+
+Do not place every statistic inside an identical small card.
+
+Use a stronger editorial hierarchy.
+
+For example:
+- one large hero statistic
+- one medium supporting statistic
+- one concise row of secondary metrics
+
+Also include:
+
+**Your Wrapped is building...**
+
+with subtle progress-style visual feedback.
+
+## Map page
+
+Create the map UI using demo locations.
+
+Show:
+- visited locations
+- simple markers
+- location cards
+- a dark visual style matching the app
+
+Tapping a marker should display:
+
+Place name  
+Visits  
+Time spent  
+Last visited
+
+Keep overlays simple and functional.
+
+Do not cover the map with excessive cards or controls.
+
+## Wrapped preview
+
+Create a simple preview screen showing that the user's Wrapped is gradually being created.
+
+For now, create 3 sample full-screen Wrapped cards using demo data.
+
+This is the area where stronger gradients, typography, motion, and experimental composition are encouraged.
+
+The Wrapped cards should feel intentionally art-directed rather than like dashboard cards enlarged to full screen.
+
+## Profile/settings
+
+Include:
+
+- Tracking status
+- Pause tracking
+- Resume tracking
+- Delete location history
+- Replay demo Wrapped
+- About Location Wrapped
+
+Keep this screen restrained and utility-focused.
+
+## Demo mode
+
+The Try Demo button should load realistic fake location history so evaluators can immediately explore:
+
+Dashboard  
+Map  
+Wrapped preview
+
+Use believable values and natural copy.
+
+Avoid exaggerated fake statistics or generic marketing language.
+
+## Architecture
+
+Prepare the app for the following data pipeline:
+
+Raw GPS records  
+↓  
+Location processing  
+↓  
+Visits  
+↓  
+Places  
+↓  
+Statistics  
+↓  
+Wrapped presentation
+
+Keep location processing logic separate from UI components.
+
+Prepare modules/services such as:
+
+- locationTracker
+- locationService
+- visitProcessor
+- statisticsService
+- wrappedGenerator
+
+## Component system
+
+Create reusable components for:
+
+- buttons
+- page headers
+- statistic displays
+- cards
+- place summaries
+- tracking status
+- bottom navigation
+- Wrapped progress
+- map detail sheets
+
+Do not duplicate visual patterns unnecessarily.
+
+If two elements serve the same purpose, they should generally use the same component or design pattern.
+
+## Important restrictions
+
+Do NOT implement:
+
+- Google Timeline import
+- live family tracking
+- social networking
+- messaging
+- payments
+- AI chat
+- leaderboards
+- friends/followers
+
+Also avoid these visual patterns unless absolutely necessary:
+
+- heavy glassmorphism
+- glowing borders
+- gradients on every component
+- oversized shadows
+- random neon effects
+- excessive pills
+- excessive floating cards
+- generic dashboard grids
+- decorative elements without purpose
+
+Do not redesign the app beyond the specifications above.
+
+The goal of Wave 1 is to create a polished product foundation with onboarding, location permissions, tracking-state UI, navigation, and demo data.
+
+Prioritize **consistency, hierarchy, restraint, and reuse** over adding extra visual effects.
