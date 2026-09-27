@@ -19,6 +19,7 @@ import { nativePalette } from '@/constants/colors';
 import { useLocation } from '@/context/LocationContext';
 import { demoPlaces, demoStatistics, demoWrappedCards } from '@/services/demoData';
 import { formatCoordinates } from '@/services/locationProcessing';
+import type { ProcessedPlace } from '@/services/visitProcessor';
 
 type Place = (typeof demoPlaces)[number];
 type RecordLocation = { lat: number; lng: number; timestamp: number; accuracy?: number };
@@ -129,9 +130,9 @@ function StatusCard() {
   const colors = useColors();
   const { state } = useLocation();
   const demo = state.mode === 'demo';
-  const active = !demo && state.status === 'active';
+  const active = !demo && state.ready && state.status === 'active';
   const title = demo ? 'Exploring the demo' : active ? 'Tracking is active' : state.status === 'paused' ? 'Tracking is paused' : state.status === 'denied' ? 'Location access denied' : state.status === 'unavailable' ? 'Location is unavailable' : 'Tracking is inactive';
-  const subtitle = demo ? 'Sample places, not your location history.' : active ? 'Your story is taking shape while this app is open.' : state.status === 'paused' ? 'No new locations are being recorded.' : 'Allow location access to begin your story.';
+  const subtitle = demo ? 'Sample places, not your location history.' : active ? state.backgroundEnabled ? 'Location updates can continue when the app is in the background.' : 'Your story is taking shape while this app is open.' : state.status === 'paused' ? 'No new locations are being recorded.' : 'Allow location access to begin your story.';
   const last = state.mode === 'real' ? state.records[state.records.length - 1] as RecordLocation | undefined : undefined;
   return (
     <View style={[styles.panel, { backgroundColor: colors.card }]} testID="card-tracking-status">
@@ -143,7 +144,7 @@ function StatusCard() {
             <Text style={styles.bodyMuted}>{subtitle}</Text>
           </View>
         </View>
-        <Label style={{ color: demo || active ? colors.lime : colors.mutedForeground }}>{demo ? 'SAMPLE' : state.status.toUpperCase()}</Label>
+         <Label style={{ color: demo || active ? colors.lime : colors.mutedForeground }}>{demo ? 'SAMPLE' : state.status === 'active' && !active ? 'CHECKING' : state.status.toUpperCase()}</Label>
       </View>
       <View style={[styles.statusStats, { borderTopColor: colors.border }]}>
         <View style={styles.statusStat}>
@@ -169,6 +170,17 @@ function prettyTime(value: number | null | undefined) {
   if (!value) return 'Not yet recorded';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 'Not yet recorded' : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function formatDuration(value: number) {
+  const minutes = Math.max(0, Math.floor(value / 60_000));
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return hours ? `${hours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
+}
+
+function placeTitle(place: ProcessedPlace, index?: number) {
+  return place.name ?? (index === undefined ? formatCoordinates(place.lat, place.lng) : `Place ${index + 1}`);
 }
 
 function EmptyCard({ title, children, action }: { title: string; children: string; action?: React.ReactNode }) {
@@ -217,7 +229,7 @@ export function LandingScreen() {
 const onboardingCopy = [
   { title: 'Your year starts here', copy: 'Location Wrapped records the places you visit so you can look back on where your year took you.', icon: 'compass-outline' as const },
   { title: 'Built around your privacy', copy: 'Location access is always your choice. Pause tracking whenever you like, or delete your location history in Profile.', icon: 'lock-closed-outline' as const },
-  { title: 'Enable Location Tracking', copy: 'Give this app location access to start collecting your own story, from this moment on.', icon: 'location-outline' as const },
+  { title: 'Enable Location Tracking', copy: 'Allow foreground location to begin collecting your story from this moment on. After tracking starts, you can optionally opt in to background updates in Profile.', icon: 'location-outline' as const },
 ];
 
 export function OnboardingScreen() {
@@ -261,10 +273,10 @@ export function OnboardingScreen() {
         <Label style={{ color: colors.lime }}>GETTING STARTED / 0{step} OF 03</Label>
         <Text style={styles.onboardTitle}>{content.title}</Text>
         <Text style={styles.onboardCopy}>{content.copy}</Text>
-        {step === 2 ? <Text style={styles.note}><Text style={styles.noteStrong}>Good to know: </Text>Location is collected only while the app is open. It does not track in the background or recover past trips.</Text> : null}
+        {step === 2 ? <Text style={styles.note}><Text style={styles.noteStrong}>Good to know: </Text>Foreground location is the default. Background updates are never enabled unless you opt in later, and past trips are not recovered.</Text> : null}
         {step === 3 ? (
           <>
-            <Text style={styles.note}><Text style={styles.noteStrong}>A clear boundary: </Text>This app only records location while open. Closing it stops collection; past location history is not imported.</Text>
+            <Text style={styles.note}><Text style={styles.noteStrong}>Your choice: </Text>Tracking starts with foreground location while the app is open. Afterward, you can separately opt in to background updates in Profile where supported. Past location history is never imported.</Text>
             {denied || permissionError ? (
               <View style={styles.alert} testID="status-permission-denied">
                 <Text style={styles.alertText}>{state.status === 'unavailable' ? 'Location is not available on this device. Check that location services are enabled, then try again.' : 'Location access was not allowed. You can enable it in Settings and try again, or explore the demo instead.'}</Text>
@@ -291,7 +303,7 @@ export function TrackingScreen() {
       <Intro label="A NEW CHAPTER" title="You're tracking" description="Your Location Wrapped starts building from here." />
       <SectionTitle>Your tracking status</SectionTitle>
       <StatusCard />
-      <Text style={[styles.note, { marginTop: 24, marginBottom: 20 }]}>Location is only collected while this app is open. Keep it open to record visits; closing it stops collection.</Text>
+      <Text style={[styles.note, { marginTop: 24, marginBottom: 20 }]}>{state.backgroundEnabled ? 'Background updates are enabled by your opt-in. You can turn them off any time in Profile.' : 'Foreground tracking records while this app is open. Background updates are optional and can be enabled later in Profile where supported.'}</Text>
       <PrimaryButton title="Go to Home" icon="arrow-right" testID="button-go-home" onPress={() => router.replace('/(tabs)')} />
     </PageFrame>
   );
@@ -330,10 +342,49 @@ export function HomeScreen() {
       ) : (
         <>
           <View style={styles.sectionBlock}>
+            <SectionTitle>Your year in numbers</SectionTitle>
+            <View style={[styles.statsCard, { backgroundColor: colors.card, borderRadius: 18, padding: 20 }]}>
+              <Label style={{ color: colors.lime }}>OBSERVED PLACES</Label>
+              <Text style={[styles.heroNumber, { color: colors.lime }]} testID="text-places-visited">{state.statistics.uniquePlaces}</Text>
+              <Text style={styles.statLabel}>places with recorded visits</Text>
+              <View style={[styles.statPair, { borderTopColor: colors.border }]}>
+                <View style={styles.statHalf}><Label>DAYS TRACKED</Label><Text style={styles.statValue} testID="text-days-tracked">{state.statistics.daysTracked}</Text><Text style={styles.smallMuted}>days with location points</Text></View>
+                <View style={styles.statHalf}><Label>VISITS</Label><Text style={styles.statValue} testID="text-total-visits">{state.statistics.totalVisits}</Text><Text style={styles.smallMuted}>observed visits</Text></View>
+              </View>
+              <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>DISTANCE OBSERVED</Label><Text style={styles.statLineValue} testID="text-distance">{state.statistics.distanceKm.toFixed(1)} km</Text></View>
+              <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>MOST VISITED</Label><Text style={styles.statLineValue} testID="text-most-visited">{state.statistics.mostVisitedPlace ? placeTitle(state.statistics.mostVisitedPlace) : 'No visits yet'}</Text></View>
+              <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>MOST TIME</Label><Text style={styles.statLineValue} testID="text-most-time">{state.statistics.mostTimePlace ? placeTitle(state.statistics.mostTimePlace) : 'No visits yet'}</Text></View>
+              <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>MOST ACTIVE DAY</Label><Text style={styles.statLineValue} testID="text-most-active-day">{state.statistics.mostActiveDay ?? 'No data yet'}</Text></View>
+              <View style={styles.statLine}><Label>MOST ACTIVE MONTH</Label><Text style={styles.statLineValue} testID="text-most-active-month">{state.statistics.mostActiveMonth ?? 'No data yet'}</Text></View>
+            </View>
+          </View>
+          <View style={styles.sectionBlock}>
             <SectionTitle>Your places</SectionTitle>
-            <EmptyCard title="The map begins with you." action={<PrimaryButton title="View your map" icon="arrow-right" variant="secondary" testID="button-view-map" onPress={() => router.push('/(tabs)/map')} />}>
-              No places yet. Your recorded coordinates will appear as you keep this app open and move around. We won't invent places or visits.
-            </EmptyCard>
+            {state.places.length ? (
+              <View style={[styles.statsCard, { backgroundColor: colors.card, borderRadius: 18, paddingHorizontal: 20 }]}>
+                {state.statistics.topPlaces.map((place, index) => (
+                  <View key={place.id} testID={`row-top-place-${index}`} style={[styles.placeRow, { borderBottomColor: colors.border }]}>
+                    <View style={styles.placeText}>
+                      <Text style={styles.placeName}>{placeTitle(place, index)}</Text>
+                      <Text style={styles.smallMuted}>{place.visitCount} {place.visitCount === 1 ? 'visit' : 'visits'} · {formatDuration(place.totalTimeMs)} observed</Text>
+                    </View>
+                    <Feather name="map-pin" size={17} color={colors.lime} />
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <EmptyCard title="The map begins with you." action={<PrimaryButton title="View your map" icon="arrow-right" variant="secondary" testID="button-view-map" onPress={() => router.push('/(tabs)/map')} />}>
+                No processed visits yet. Recorded GPS points are shown separately and do not count as places or visits.
+              </EmptyCard>
+            )}
+            <View style={[styles.panel, { backgroundColor: colors.card, marginTop: 14 }]} testID="card-raw-point-count">
+              <Label style={{ color: colors.lime }}>RAW LOCATION POINTS</Label>
+              <Text style={[styles.statusTitle, { marginTop: 9 }]} testID="text-raw-point-count">{state.records.length}</Text>
+              <Text style={styles.bodyMuted}>Recorded coordinates are separate from processed places and visits.</Text>
+              <Pressable onPress={() => router.push('/(tabs)/map')} testID="button-view-raw-points" style={styles.textLink}>
+                <Text style={{ color: colors.lime, fontWeight: '700' }}>View raw points on map</Text><Feather name="arrow-right" size={16} color={colors.lime} />
+              </Pressable>
+            </View>
           </View>
           <View style={styles.sectionBlock}>
             <SectionTitle>Your Wrapped</SectionTitle>
@@ -372,6 +423,7 @@ function positionOf(lat: number, lng: number, points: { lat: number; lng: number
 
 function dateLabel(value: string | number | null) {
   if (!value) return 'Not available';
+  if (typeof value === 'string' && !/\b\d{4}\b/.test(value)) return value;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 }
@@ -380,17 +432,17 @@ export function MapScreen() {
   const colors = useColors();
   const { state } = useLocation();
   const demo = state.mode === 'demo';
-  const places = demo ? demoPlaces : [];
+  const places: (Place | ProcessedPlace)[] = demo ? demoPlaces : state.places;
   const records = state.mode === 'real' ? (state.records as RecordLocation[]).slice(-12) : [];
-  const points = demo ? places : records;
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [selectedProcessedPlace, setSelectedProcessedPlace] = useState<ProcessedPlace | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<RecordLocation | null>(null);
-  const selected = selectedPlace || selectedRecord;
-  const closeDetails = () => { setSelectedPlace(null); setSelectedRecord(null); };
+  const selected = selectedPlace || selectedProcessedPlace || selectedRecord;
+  const closeDetails = () => { setSelectedPlace(null); setSelectedProcessedPlace(null); setSelectedRecord(null); };
   return (
     <PageFrame mode={state.mode}>
-      <Intro label={demo ? 'DEMO / SAMPLE MAP' : 'YOUR MAP / LIVE RECORDS'} title="Your map." description={demo ? 'The places in this sample story. Tap a marker to take a closer look.' : 'Only your recorded coordinates appear here. Place names and visit summaries are not available yet.'} />
-      <View style={[styles.mapCanvas, { backgroundColor: colors.map }]} accessibilityLabel={demo ? 'Illustrated demo map with clickable place markers' : 'Illustrated map of recorded coordinates'}>
+      <Intro label={demo ? 'DEMO / SAMPLE MAP' : 'YOUR MAP / OBSERVED PLACES'} title="Your map." description={demo ? 'The places in this sample story. Tap a marker to take a closer look.' : 'Markers represent processed places from your real visit history. Raw GPS points are listed separately below.'} />
+      <View style={[styles.mapCanvas, { backgroundColor: colors.map }]} accessibilityLabel={demo ? 'Illustrated demo map with clickable place markers' : 'Illustrated map with real processed place markers'}>
         <Svg style={StyleSheet.absoluteFill} viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice">
           <Rect width="400" height="500" fill={colors.map} />
           <Path d="M-40 85 L430 420 M-40 20 L430 355 M-35 180 L420 495 M10 -35 L380 540 M120 -30 L490 545 M250 -30 L620 545" stroke={colors.mapRoad} strokeWidth="4" opacity=".65" />
@@ -400,19 +452,19 @@ export function MapScreen() {
           <Path d="M90 130 C150 175 124 254 219 255 C310 257 270 360 346 388" stroke={colors.lime} strokeWidth="2" strokeDasharray="5 8" opacity=".55" fill="none" />
           <Circle cx="200" cy="246" r="85" stroke={nativePalette.white} strokeWidth="1" opacity=".12" fill="none" />
         </Svg>
-        <View style={styles.mapKey}><Label style={{ color: colors.foreground }}>{demo ? 'SAMPLE MAP / NOT TO SCALE' : 'YOUR RECORDS / SCHEMATIC VIEW'}</Label></View>
+        <View style={styles.mapKey}><Label style={{ color: colors.foreground }}>{demo ? 'SAMPLE MAP / NOT TO SCALE' : 'OBSERVED PLACES / SCHEMATIC VIEW'}</Label></View>
         <View style={styles.mapLabelOne}><Label style={styles.mapLabelText}>THE NEIGHBORHOOD</Label></View>
         <View style={styles.mapLabelTwo}><Label style={styles.mapLabelText}>A PLACE TO REMEMBER</Label></View>
-        {points.map((point, index) => {
-          const pos = positionOf(point.lat, point.lng, points);
+        {places.map((place, index) => {
+          const pos = positionOf(place.lat, place.lng, places);
           return (
             <Pressable
-              key={demo ? (point as Place).id : `${(point as RecordLocation).timestamp}-${index}`}
+              key={place.id}
               accessibilityRole="button"
-              accessibilityLabel={demo ? `View ${(point as Place).name}` : `View recorded location ${index + 1}`}
-              testID={demo ? `button-map-marker-${(point as Place).id}` : `button-record-marker-${index}`}
-              onPress={() => demo ? setSelectedPlace(point as Place) : setSelectedRecord(point as RecordLocation)}
-              style={({ pressed }) => [styles.mapMarker, { left: pos.left, top: pos.top, backgroundColor: selected === point ? colors.pink : colors.lime, borderColor: colors.background }, pressed && styles.pressed]}
+              accessibilityLabel={`View ${demo ? (place as Place).name : `observed place ${index + 1}`}`}
+              testID={demo ? `button-map-marker-${place.id}` : `button-place-marker-${index}`}
+              onPress={() => demo ? setSelectedPlace(place as Place) : setSelectedProcessedPlace(place as ProcessedPlace)}
+              style={({ pressed }) => [styles.mapMarker, { left: pos.left, top: pos.top, backgroundColor: selected === place ? colors.pink : colors.lime, borderColor: colors.background }, pressed && styles.pressed]}
             >
               <Ionicons name="location" size={17} color={colors.background} />
             </Pressable>
@@ -420,19 +472,30 @@ export function MapScreen() {
         })}
       </View>
       <View style={styles.sectionBlock}>
-        <SectionTitle>{demo ? `${places.length} sample places` : 'Recorded coordinates'}</SectionTitle>
-        {demo ? places.map(place => (
+        <SectionTitle>{demo ? `${places.length} sample places` : `${state.places.length} observed places`}</SectionTitle>
+        {demo ? demoPlaces.map(place => (
           <Pressable key={place.id} testID={`button-place-${place.id}`} onPress={() => setSelectedPlace(place)} style={[styles.placeRow, { borderBottomColor: colors.border }]}>
             <View style={styles.placeText}><Text style={styles.placeName}>{place.name}</Text><Text style={styles.smallMuted}>{place.category} · {place.visits} visits</Text></View><Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </Pressable>
-        )) : records.length ? records.slice().reverse().map((record, index) => (
-          <Pressable key={`${record.timestamp}-${index}`} testID={`button-record-${index}`} onPress={() => setSelectedRecord(record)} style={[styles.placeRow, { borderBottomColor: colors.border }]}>
-            <View style={styles.placeText}><Text style={styles.placeName}>{formatCoordinates(record.lat, record.lng)}</Text><Text style={styles.smallMuted}>{prettyTime(record.timestamp)}</Text></View><Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+        )) : state.places.length ? state.places.map((place, index) => (
+          <Pressable key={place.id} testID={`button-processed-place-${index}`} onPress={() => setSelectedProcessedPlace(place)} style={[styles.placeRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.placeText}><Text style={styles.placeName}>{placeTitle(place, index)}</Text><Text style={styles.smallMuted}>{place.visitCount} {place.visitCount === 1 ? 'visit' : 'visits'} · {formatDuration(place.totalTimeMs)}</Text></View><Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </Pressable>
         )) : (
-          <EmptyCard title="No points on your map yet.">Keep this app open with tracking active to record your first location. There are no sample places mixed into your history.</EmptyCard>
+          <EmptyCard title="No observed places yet.">A processed place appears after location points form a visit. Raw GPS points are shown in their own section below; no sample places are mixed into your history.</EmptyCard>
         )}
       </View>
+      {!demo ? (
+        <View style={styles.sectionBlock}>
+          <SectionTitle>{`Raw location points · ${state.records.length}`}</SectionTitle>
+          <Text style={[styles.smallMuted, { marginBottom: 8 }]}>Most recent {records.length} recorded GPS coordinates. These are not place markers or visits.</Text>
+          {records.length ? records.slice().reverse().map((record, index) => (
+            <Pressable key={`${record.timestamp}-${index}`} testID={`button-record-${index}`} onPress={() => setSelectedRecord(record)} style={[styles.placeRow, { borderBottomColor: colors.border }]}>
+              <View style={styles.placeText}><Text style={styles.placeName}>{formatCoordinates(record.lat, record.lng)}</Text><Text style={styles.smallMuted}>{prettyTime(record.timestamp)}</Text></View><Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            </Pressable>
+          )) : <Text style={styles.bodyMuted}>No raw location points recorded yet.</Text>}
+        </View>
+      ) : null}
       <Modal visible={Boolean(selected)} animationType="slide" transparent onRequestClose={closeDetails} statusBarTranslucent>
         <View style={styles.modalShade}>
           <Pressable style={StyleSheet.absoluteFill} onPress={closeDetails} accessibilityLabel="Close details" />
@@ -440,15 +503,16 @@ export function MapScreen() {
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHead}>
               <View style={styles.sheetHeadingText}>
-                <Label style={{ color: colors.lime }}>{selectedPlace ? 'DEMO PLACE' : 'YOUR RECORDED POINT'}</Label>
-                <Text style={styles.sheetTitle} testID="text-place-name">{selectedPlace?.name ?? (selectedRecord ? formatCoordinates(selectedRecord.lat, selectedRecord.lng) : '')}</Text>
+                <Label style={{ color: colors.lime }}>{selectedPlace ? 'DEMO PLACE' : selectedProcessedPlace ? 'OBSERVED PLACE' : 'RAW LOCATION POINT'}</Label>
+                <Text style={styles.sheetTitle} testID="text-place-name">{selectedPlace?.name ?? (selectedProcessedPlace ? placeTitle(selectedProcessedPlace) : selectedRecord ? formatCoordinates(selectedRecord.lat, selectedRecord.lng) : '')}</Text>
               </View>
               <Pressable onPress={closeDetails} accessibilityLabel="Close details" testID="button-close-details" style={[styles.closeButton, { backgroundColor: nativePalette.close }]}><Feather name="x" size={18} color={colors.foreground} /></Pressable>
             </View>
             <View style={[styles.detailGrid, { borderTopColor: colors.border }]}>
-              <Detail label="Visits" value={selectedPlace ? String(selectedPlace.visits) : 'Not available yet'} testID="text-place-visits" />
-              <Detail label="Time spent" value={selectedPlace?.timeSpent ?? 'Not available yet'} testID="text-place-time" />
-              <Detail label="Last visited" value={selectedPlace ? dateLabel(selectedPlace.lastVisited) : dateLabel(selectedRecord?.timestamp ?? null)} testID="text-place-last-visited" />
+              <Detail label="Visits" value={selectedPlace ? String(selectedPlace.visits) : selectedProcessedPlace ? String(selectedProcessedPlace.visitCount) : 'Not available'} testID="text-place-visits" />
+              <Detail label="Time spent" value={selectedPlace?.timeSpent ?? (selectedProcessedPlace ? formatDuration(selectedProcessedPlace.totalTimeMs) : 'Not available')} testID="text-place-time" />
+              {selectedProcessedPlace ? <Detail label="First visited" value={dateLabel(selectedProcessedPlace.firstVisit)} testID="text-place-first-visited" /> : null}
+              <Detail label="Last visited" value={selectedPlace ? dateLabel(selectedPlace.lastVisited) : selectedProcessedPlace ? dateLabel(selectedProcessedPlace.latestVisit) : dateLabel(selectedRecord?.timestamp ?? null)} testID="text-place-last-visited" />
               <Detail label="Location" value={selected ? formatCoordinates(selected.lat, selected.lng) : ''} />
             </View>
           </SafeAreaView>
@@ -519,13 +583,45 @@ export function WrappedScreen() {
 
 export function ProfileScreen() {
   const colors = useColors();
-  const { state, pause, resume, clearHistory } = useLocation();
+  const { state, requestAccess, pause, resume, clearHistory, openSettings, enableBackground, disableBackground } = useLocation();
   const demo = state.mode === 'demo';
   const [confirm, setConfirm] = useState(false);
   const [message, setMessage] = useState('');
+  const [controlMessage, setControlMessage] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const canToggle = state.status === 'active' || state.status === 'paused';
-  const toggle = () => state.status === 'active' ? pause() : resume();
+  const [backgroundMessage, setBackgroundMessage] = useState('');
+  const realCanToggle = state.mode === 'real' && (state.status === 'active' || state.status === 'paused');
+  const toggle = async () => {
+    setControlMessage('');
+    try { if (state.status === 'active') await pause(); else await resume(); }
+    catch { setControlMessage('Could not update tracking. Please try again.'); }
+  };
+  const toggleBackground = async () => {
+    setBackgroundMessage('');
+    try {
+      if (state.backgroundEnabled) {
+        await disableBackground();
+        setBackgroundMessage('Background location updates are off.');
+      } else if (await enableBackground()) {
+        setBackgroundMessage('Background location updates are on.');
+      } else if (!state.backgroundAvailable) {
+        setBackgroundMessage('Background location requires a development build; it is not available in Expo Go.');
+      } else {
+        setBackgroundMessage('Background access was not enabled. Check your location permissions in Settings and try again.');
+      }
+    } catch {
+      setBackgroundMessage('Could not update background location access. Please try again.');
+    }
+  };
+  const startTracking = async () => {
+    try { await requestAccess(); }
+    catch { setControlMessage('Could not start tracking. Check your location permissions and try again.'); }
+  };
+  const openLocationSettings = async () => {
+    setControlMessage('');
+    try { await openSettings(); }
+    catch { setControlMessage('Could not open Settings. Open your device Settings and allow location for Location Wrapped.'); }
+  };
   const erase = async () => {
     setDeleting(true);
     try {
@@ -548,16 +644,33 @@ export function ProfileScreen() {
         <SectionTitle>Your controls</SectionTitle>
         <View style={[styles.settingsList, { borderTopColor: colors.border }]}>
           {demo ? <SettingRow title="Start your own story" copy="Enable location access and leave the sample behind." icon="arrow-right" testID="button-start-real-tracking" onPress={() => router.push('/onboarding/1')} /> : (
-            <SettingRow title={state.status === 'active' ? 'Pause tracking' : 'Resume tracking'} copy={state.status === 'active' ? 'Stop recording new locations for now.' : 'Start recording again while this app is open.'} icon={state.status === 'active' ? 'pause' : 'play'} testID="button-toggle-tracking" disabled={!canToggle} onPress={toggle} />
+            realCanToggle ? (
+              <SettingRow title={state.status === 'active' ? 'Pause tracking' : 'Resume tracking'} copy={state.status === 'active' ? 'Stop recording new locations for now.' : 'Start recording again while this app is open.'} icon={state.status === 'active' ? 'pause' : 'play'} testID="button-toggle-tracking" onPress={toggle} />
+            ) : (
+              <SettingRow title="Start tracking" copy={state.status === 'denied' ? 'Request location access again to begin recording.' : state.status === 'unavailable' ? 'Check device location services, then try again.' : 'Allow foreground location to begin recording your own history.'} icon="navigation" testID="button-start-tracking" onPress={() => { void startTracking(); }} />
+            )
           )}
+          {!demo && state.status === 'denied' && !state.canAskAgain ? <SettingRow title="Open location Settings" copy="Location access is denied. Enable it in your device settings to continue." icon="settings" testID="button-profile-open-settings" onPress={() => { void openLocationSettings(); }} /> : null}
+          {!demo && realCanToggle ? (
+            <SettingRow
+              title={state.backgroundEnabled ? 'Turn off background updates' : 'Opt in to background updates'}
+              copy={state.backgroundAvailable ? state.backgroundEnabled ? state.status === 'paused' ? 'Background updates are paused. Resume tracking to collect new locations.' : 'Allow location updates when the app is not open. You can turn this off at any time.' : state.status === 'paused' ? 'Resume tracking before enabling background updates.' : 'Optional: allow updates when the app is not open. This requires background location permission.' : 'Background location is unavailable in Expo Go. Use a development build to enable this optional feature.'}
+              icon={state.backgroundEnabled ? 'check-circle' : 'clock'}
+              testID="button-toggle-background-tracking"
+              disabled={(!state.backgroundAvailable || state.status !== 'active') && !state.backgroundEnabled}
+              onPress={() => { void toggleBackground(); }}
+            />
+          ) : null}
           <SettingRow title="Replay demo Wrapped" copy="A preview with sample data, never your history." icon="rotate-ccw" testID="button-replay-demo" onPress={() => router.push('/(tabs)/wrapped?play=1')} />
-          <SettingRow title={demo ? 'Leave demo & clear history' : 'Delete location history'} copy={demo ? 'Remove the demo and any stored location records.' : 'Permanently remove your recorded locations from this device.'} icon="trash-2" danger testID="button-delete-history" onPress={() => setConfirm(true)} />
+          <SettingRow title={demo ? 'Leave demo & clear history' : 'Delete My Location History'} copy={demo ? 'Remove the demo and any stored location records.' : 'Permanently remove your recorded locations from this device.'} icon="trash-2" danger testID="button-delete-history" onPress={() => setConfirm(true)} />
         </View>
+        {!demo && controlMessage ? <Text accessibilityRole="alert" testID="status-tracking-control" style={[styles.bodyMuted, { marginTop: 12 }]}>{controlMessage}</Text> : null}
+        {!demo && backgroundMessage ? <Text accessibilityRole="alert" testID="status-background-tracking" style={[styles.bodyMuted, { marginTop: 12 }]}>{backgroundMessage}</Text> : null}
       </View>
       <View style={[styles.aboutCard, { backgroundColor: colors.card }]}>
         <Label style={{ color: colors.lime }}>ABOUT THE APP</Label>
         <Text style={styles.aboutTitle}>About Location Wrapped</Text>
-        <Text style={styles.bodyMuted}>Location Wrapped turns the places you go into a story of your year. In this first version, tracking begins only when you grant permission and works only while this app is open. It cannot track in the background, import past trips, or identify place names from your coordinates. Demo content is always labeled and kept separate from your history.</Text>
+        <Text style={styles.bodyMuted}>Location Wrapped turns observed visits into a story of your year. Foreground tracking begins only when you grant permission. Background updates are a separate, optional opt-in when supported; Expo Go requires a development build for this feature. Past trips are never imported, and place names are not inferred from coordinates. Demo content is always labeled and kept separate from your history.</Text>
       </View>
       <Modal visible={confirm} animationType="slide" transparent onRequestClose={() => setConfirm(false)} statusBarTranslucent>
         <View style={styles.modalShade}>

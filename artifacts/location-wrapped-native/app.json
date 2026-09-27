@@ -10,11 +10,12 @@
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Location Wrapped records your location while the app is open so you can build your personal place history."
+        "NSLocationWhenInUseUsageDescription": "Location Wrapped records your location while you use the app to build your personal place history.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "If you enable background tracking, Location Wrapped records your location while the app is closed to build your place history."
       }
     },
     "android": {
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION"]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -22,9 +23,11 @@
     "plugins": [
       "expo-router",
       ["expo-location", {
-        "locationWhenInUsePermission": "Location Wrapped records your location while the app is open so you can build your personal place history.",
-        "isAndroidBackgroundLocationEnabled": false,
-        "isIosBackgroundLocationEnabled": false
+        "locationWhenInUsePermission": "Location Wrapped records your location while you use the app to build your personal place history.",
+        "locationAlwaysAndWhenInUsePermission": "If you enable background tracking, Location Wrapped records your location while the app is closed to build your place history.",
+        "isAndroidBackgroundLocationEnabled": true,
+        "isAndroidForegroundServiceEnabled": true,
+        "isIosBackgroundLocationEnabled": true
       }]
     ],
     "experiments": {

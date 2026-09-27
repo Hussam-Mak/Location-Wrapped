@@ -1,0 +1,78 @@
+Continue the existing **React Native + Expo Location Wrapped mobile app**. Do not redesign or rebuild Wave 1.
+
+Implement **Wave 2: real location tracking, persistent storage, and visit detection**.
+
+Requirements:
+
+- Use native Expo location APIs, not browser geolocation.
+- Support foreground location tracking and background location tracking where supported.
+- Add proper iOS and Android permission handling.
+- Add Start Tracking, Pause Tracking, and Resume Tracking.
+- Clearly show whether tracking is active.
+- Never claim tracking is active if permissions are denied or revoked.
+- Persist tracking state across app restarts where possible.
+
+For each raw location point, store:
+- latitude
+- longitude
+- timestamp
+- accuracy
+
+Do not save GPS every second. Use battery-conscious updates based on time and movement, and ignore low-value duplicate points or very poor accuracy.
+
+Store location history persistently using a proper storage/database layer.
+
+Create a separate `visitProcessor` that groups nearby GPS points into meaningful visits instead of treating every point as a place.
+
+A visit should include:
+- arrival time
+- departure time
+- duration
+- representative coordinates
+- associated place ID
+
+Create processed places containing:
+- representative coordinates
+- visit count
+- total time spent
+- first visit
+- latest visit
+- optional place name/category
+
+Create a separate `statisticsService` for:
+- days tracked
+- unique places
+- total visits
+- distance traveled
+- most visited place
+- place with most time spent
+- most active day/month
+- top places
+
+Connect the existing Home and Map screens to real tracked data instead of demo data when real data exists.
+
+Add **Delete My Location History** with confirmation.
+
+Keep the architecture separated:
+
+Location Tracker  
+→ Raw GPS Records  
+→ Visit Processor  
+→ Places  
+→ Statistics  
+→ UI
+
+Do not implement the full Wrapped experience yet. That is Wave 3.
+
+Before finishing, test:
+- permission allowed
+- permission denied
+- backgrounding the app
+- app restart
+- pause/resume
+- duplicate GPS points
+- poor accuracy
+- staying in one place
+- moving between places
+- data persistence
+- deleting history
