@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "Location Wrapped Mobile"
+description = "A native iOS and Android location-history app with privacy-first onboarding, foreground tracking, demo places, a map, and Wrapped previews."
+version = "1.0.0"
+id = "artifacts/location-wrapped-native"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/mobile/" ]
+localPort = 23018
+
+[services.development]
+run = "pnpm --filter @workspace/location-wrapped-native run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/location-wrapped-native", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/location-wrapped-native", "run", "serve" ]
+
+[services.env]
+PORT = "23018"
+BASE_PATH = "/mobile/"

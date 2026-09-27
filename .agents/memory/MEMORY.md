@@ -1,0 +1,1 @@
+- [Native artifact conversion](native-artifact-conversion.md) — artifact kinds cannot be converted in place; an obsolete web artifact needs Library deletion after its workflow is stopped.
