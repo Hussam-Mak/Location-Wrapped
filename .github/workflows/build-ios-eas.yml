@@ -1,0 +1,38 @@
+name: Build iOS with EAS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Expo / EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Verify Expo authentication
+        run: eas whoami
+
+      - name: Start signed iOS internal-distribution build
+        working-directory: artifacts/location-wrapped-native
+        run: eas build --platform ios --profile preview --non-interactive --no-wait
