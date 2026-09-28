@@ -1,0 +1,20 @@
+name: Register iPhone and Build
+
+on:
+  push:
+    branches: ['main']
+    if: ${{ startsWith(github.commit_message, '[ios-register]') }}
+
+jobs:
+  register_device:
+    name: Register iPhone
+    type: apple-device-registration-request
+
+  build_ios:
+    name: Build signed iPhone app
+    needs: [register_device]
+    type: build
+    params:
+      platform: ios
+      profile: preview
+      refresh_ad_hoc_provisioning_profile: true
