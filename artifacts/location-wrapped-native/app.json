@@ -8,6 +8,7 @@
     "scheme": "location-wrapped-native",
     "userInterfaceStyle": "dark",
     "ios": {
+      "bundleIdentifier": "com.locationwrapped.app281caa0fec8f60cb",
       "supportsTablet": false,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Location Wrapped records your location while you use the app to build your personal place history.",
@@ -15,6 +16,7 @@
       }
     },
     "android": {
+      "package": "com.locationwrapped.app281caa0fec8f60cb",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
