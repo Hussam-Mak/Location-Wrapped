@@ -1,0 +1,14 @@
+name: Build iPhone Internal
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  build_ios:
+    name: Build signed iPhone app
+    type: build
+    params:
+      platform: ios
+      profile: preview
+      refresh_ad_hoc_provisioning_profile: true
