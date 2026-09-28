@@ -46,7 +46,7 @@ jobs:
       - name: Generate native Android project
         env:
           CI: "1"
-        run: pnpm --dir artifacts/location-wrapped-native exec expo prebuild --platform android --clean
+        run: pnpm --dir artifacts/location-wrapped-native exec expo prebuild --platform android --clean --skip-dependency-update expo,react,react-native
 
       - name: Build APK
         working-directory: artifacts/location-wrapped-native/android
