@@ -1,3 +1,4 @@
 - [Native artifact conversion](native-artifact-conversion.md) — artifact kinds cannot be converted in place; an obsolete web artifact needs Library deletion after its workflow is stopped.
 - [Expo background tracking](expo-background-tracking.md) — task registration must load before Router; Expo Go cannot verify background collection, so use a development build.
 - [Expo workspace packages](expo-workspace-packages.md) — generic package installation targets the monorepo root; target the mobile workspace package explicitly.
+- [Private map tiles](private-map-tiles.md) — real location map tiles are opt-in because third-party tile requests disclose the viewed geographic area.

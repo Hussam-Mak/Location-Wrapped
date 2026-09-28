@@ -1,3 +1,3 @@
-import { WrappedScreen } from '@/components/LocationWrapped';
+import WrappedExperience from '@/components/WrappedExperience';
 
-export default WrappedScreen;
+export default WrappedExperience;

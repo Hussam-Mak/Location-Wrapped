@@ -1,0 +1,83 @@
+Continue the existing **React Native + Expo Location Wrapped mobile app**. Preserve the Wave 1 design system and Wave 2 tracking/storage architecture.
+
+Implement **Wave 3: real dashboard, map, place details, and the full Wrapped experience**.
+
+Requirements:
+
+- Use real processed tracking data when available.
+- Keep demo mode available for testing.
+- Do not redesign the app.
+
+## Home
+
+Show real:
+- days tracked
+- places visited
+- distance traveled
+- most visited place
+- most active month
+- tracking status
+
+Use strong visual hierarchy instead of a grid of identical cards.
+
+## Map
+
+Build the real map experience using processed places and visits.
+
+Show:
+- visited places
+- clustered markers where appropriate
+- frequently visited locations
+- tap-to-open place details
+
+Place details should include:
+- visit count
+- total time spent
+- first visit
+- latest visit
+- optional place name/category
+
+Do not show thousands of raw GPS points.
+
+## Wrapped
+
+Build the full-screen mobile Wrapped experience using real statistics.
+
+Include roughly these cards:
+
+1. Intro — “This was your year.”
+2. Total distance traveled
+3. Places explored
+4. Most visited place
+5. Place where the user spent the most time
+6. Most active month
+7. Location personality such as Explorer / Regular / Wanderer / Local
+8. Location heatmap
+9. Top 5 places
+10. Final summary
+
+Wrapped should:
+- hide bottom navigation
+- use full-screen cards
+- have progress indicators
+- support tap/swipe forward and backward
+- have smooth native animations
+- use bold typography and expressive gradients
+- feel more visually experimental than the core app
+
+Use a separate `wrappedGenerator` so the flow stays:
+
+Statistics → Wrapped data → UI
+
+Do not hardcode statistics inside the visual components.
+
+Handle edge cases gracefully:
+- very little data
+- one place
+- unnamed places
+- one month of tracking
+- zero meaningful distance
+
+Do not implement sharing yet. That is Wave 4.
+
+Before finishing, test the dashboard, map, place details, Wrapped navigation, and demo mode using both small and normal datasets.

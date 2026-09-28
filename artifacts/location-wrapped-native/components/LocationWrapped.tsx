@@ -315,7 +315,7 @@ export function HomeScreen() {
   const demo = state.mode === 'demo';
   return (
     <PageFrame mode={state.mode}>
-      <Intro label={demo ? 'DEMO / SAMPLE HISTORY' : 'YOUR STORY / IN PROGRESS'} title={demo ? 'A year in places.' : 'Your story starts here.'} description={demo ? 'An example of what your location story could look like.' : 'Every visit starts with a single moment.'} />
+      <Intro label={demo ? 'DEMO / SAMPLE HISTORY' : 'YOUR STORY / IN PROGRESS'} title={demo ? 'A year in places.' : state.places.length ? 'Your year in places.' : 'Your story starts here.'} description={demo ? 'An example of what your location story could look like.' : state.places.length ? 'The moments you chose to record, told in places.' : 'Every visit starts with a single moment.'} />
       <SectionTitle>Tracking</SectionTitle>
       <StatusCard />
       {demo ? (
@@ -332,6 +332,7 @@ export function HomeScreen() {
               </View>
               <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>MOST VISITED</Label><Text style={styles.statLineValue} testID="text-most-visited">{demoStatistics.mostVisitedPlace}</Text></View>
               <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>MOST ACTIVE DAY</Label><Text style={styles.statLineValue} testID="text-most-active-day">{demoStatistics.mostActiveDay}</Text></View>
+                <View style={styles.statLine}><Label>MOST ACTIVE MONTH</Label><Text style={styles.statLineValue} testID="text-most-active-month">{demoStatistics.mostActiveMonth}</Text></View>
             </View>
           </View>
           <View style={styles.sectionBlock}>
@@ -349,27 +350,40 @@ export function HomeScreen() {
               <Text style={styles.statLabel}>places with recorded visits</Text>
               <View style={[styles.statPair, { borderTopColor: colors.border }]}>
                 <View style={styles.statHalf}><Label>DAYS TRACKED</Label><Text style={styles.statValue} testID="text-days-tracked">{state.statistics.daysTracked}</Text><Text style={styles.smallMuted}>days with location points</Text></View>
-                <View style={styles.statHalf}><Label>VISITS</Label><Text style={styles.statValue} testID="text-total-visits">{state.statistics.totalVisits}</Text><Text style={styles.smallMuted}>observed visits</Text></View>
+                <View style={styles.statHalf}><Label>DISTANCE TRAVELED</Label><Text style={styles.statValue} testID="text-distance">{state.statistics.distanceKm.toFixed(1)}<Text style={styles.km}> km</Text></Text><Text style={styles.smallMuted}>observed route</Text></View>
               </View>
-              <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>DISTANCE OBSERVED</Label><Text style={styles.statLineValue} testID="text-distance">{state.statistics.distanceKm.toFixed(1)} km</Text></View>
-              <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>MOST VISITED</Label><Text style={styles.statLineValue} testID="text-most-visited">{state.statistics.mostVisitedPlace ? placeTitle(state.statistics.mostVisitedPlace) : 'No visits yet'}</Text></View>
+              <Pressable
+                accessibilityRole="button"
+                disabled={!state.statistics.mostVisitedPlace}
+                testID="button-home-most-visited"
+                onPress={() => {
+                  const place = state.statistics.mostVisitedPlace;
+                  if (place) router.push({ pathname: '/(tabs)/map', params: { place: place.id } });
+                }}
+                style={[styles.homeFavorite, { backgroundColor: nativePalette.purple }]}
+              >
+                <Label style={{ color: colors.lime }}>YOUR MOST VISITED PLACE</Label>
+                <Text style={styles.homeFavoriteTitle} testID="text-most-visited">{state.statistics.mostVisitedPlace ? placeTitle(state.statistics.mostVisitedPlace) : 'No visits yet'}</Text>
+                <Text style={styles.homeFavoriteSub}>{state.statistics.mostVisitedPlace ? `${state.statistics.mostVisitedPlace.visitCount} observed visits · Tap for details` : 'Your first observed visit will appear here.'}</Text>
+              </Pressable>
+              <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>TOTAL VISITS</Label><Text style={styles.statLineValue} testID="text-total-visits">{state.statistics.totalVisits}</Text></View>
               <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>MOST TIME</Label><Text style={styles.statLineValue} testID="text-most-time">{state.statistics.mostTimePlace ? placeTitle(state.statistics.mostTimePlace) : 'No visits yet'}</Text></View>
               <View style={[styles.statLine, { borderBottomColor: colors.border }]}><Label>MOST ACTIVE DAY</Label><Text style={styles.statLineValue} testID="text-most-active-day">{state.statistics.mostActiveDay ?? 'No data yet'}</Text></View>
-              <View style={styles.statLine}><Label>MOST ACTIVE MONTH</Label><Text style={styles.statLineValue} testID="text-most-active-month">{state.statistics.mostActiveMonth ?? 'No data yet'}</Text></View>
+              <View style={styles.statLine}><Label>MOST ACTIVE MONTH</Label><Text style={styles.statLineValue} testID="text-most-active-month">{state.statistics.mostActiveMonth ? new Date(`${state.statistics.mostActiveMonth}-01T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'No data yet'}</Text></View>
             </View>
           </View>
           <View style={styles.sectionBlock}>
             <SectionTitle>Your places</SectionTitle>
             {state.places.length ? (
               <View style={[styles.statsCard, { backgroundColor: colors.card, borderRadius: 18, paddingHorizontal: 20 }]}>
-                {state.statistics.topPlaces.map((place, index) => (
-                  <View key={place.id} testID={`row-top-place-${index}`} style={[styles.placeRow, { borderBottomColor: colors.border }]}>
+                {state.statistics.topPlaces.slice(0, 5).map((place, index) => (
+                  <Pressable key={place.id} testID={`row-top-place-${index}`} onPress={() => router.push({ pathname: '/(tabs)/map', params: { place: place.id } })} style={[styles.placeRow, { borderBottomColor: colors.border }]}>
                     <View style={styles.placeText}>
                       <Text style={styles.placeName}>{placeTitle(place, index)}</Text>
                       <Text style={styles.smallMuted}>{place.visitCount} {place.visitCount === 1 ? 'visit' : 'visits'} · {formatDuration(place.totalTimeMs)} observed</Text>
                     </View>
                     <Feather name="map-pin" size={17} color={colors.lime} />
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             ) : (
@@ -398,13 +412,15 @@ export function HomeScreen() {
 
 function WrappedTeaser({ demo = false }: { demo?: boolean }) {
   const colors = useColors();
+  const { state } = useLocation();
+  const hasHistory = state.statistics.totalVisits > 0;
   return (
     <View style={[styles.teaser, { backgroundColor: nativePalette.wrappedCard }]}>
-      <Label style={{ color: colors.pink }}>{demo ? 'WRAPPED / DEMO PREVIEW' : 'YOUR STORY / JUST BEGINNING'}</Label>
-      <Text style={styles.teaserTitle}>Your Wrapped is building...</Text>
-      <Text style={styles.teaserCopy}>{demo ? 'See how the places you return to become a story worth keeping.' : 'Once you’ve collected enough of your own history, there will be a story to tell. For now, explore a clearly labeled sample.'}</Text>
+      <Label style={{ color: colors.pink }}>{demo ? 'WRAPPED / DEMO STORY' : 'YOUR STORY / LOCATION WRAPPED'}</Label>
+      <Text style={styles.teaserTitle}>{demo ? 'A sample story in ten moments.' : hasHistory ? 'Your Wrapped is ready.' : 'Your Wrapped starts with a visit.'}</Text>
+      <Text style={styles.teaserCopy}>{demo ? 'See how the places you return to become a story worth keeping.' : hasHistory ? 'See the year told by your real observed places and visits.' : 'Your own history will build here. Until then, explore a clearly labeled sample in Wrapped.'}</Text>
       <View style={[styles.progressTrack, { backgroundColor: nativePalette.progressTrack }]}><View style={[styles.progressFill, { backgroundColor: colors.pink }]} /></View>
-      <Pressable onPress={() => router.push('/(tabs)/wrapped')} testID="button-preview-wrapped" style={styles.textLink}><Text style={{ color: colors.lime, fontWeight: '700' }}>{demo ? 'Explore demo Wrapped' : 'See demo preview'}</Text><Feather name="arrow-right" size={16} color={colors.lime} /></Pressable>
+      <Pressable onPress={() => router.push('/(tabs)/wrapped')} testID="button-preview-wrapped" style={styles.textLink}><Text style={{ color: colors.lime, fontWeight: '700' }}>{demo ? 'Explore demo Wrapped' : hasHistory ? 'Explore your Wrapped' : 'Open Wrapped'}</Text><Feather name="arrow-right" size={16} color={colors.lime} /></Pressable>
     </View>
   );
 }
@@ -760,6 +776,9 @@ const styles = StyleSheet.create({
   heroNumber: { fontFamily: 'Inter_700Bold', fontSize: 112, lineHeight: 112, letterSpacing: -11, marginLeft: -5, marginTop: 17 },
   statLabel: { color: nativePalette.white, fontFamily: 'Inter_500Medium', fontSize: 15, marginTop: 4, paddingBottom: 23 },
   statPair: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 20, gap: 15 },
+  homeFavorite: { borderRadius: 16, padding: 19, marginTop: 21, marginBottom: 3 },
+  homeFavoriteTitle: { color: nativePalette.white, fontFamily: 'Inter_700Bold', fontSize: 26, lineHeight: 31, letterSpacing: -1.2, marginTop: 10 },
+  homeFavoriteSub: { color: nativePalette.white, opacity: 0.8, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 8 },
   statHalf: { flex: 1 },
   statValue: { color: nativePalette.white, fontFamily: 'Inter_600SemiBold', fontSize: 39, letterSpacing: -2, marginTop: 7, marginBottom: 2 },
   km: { color: nativePalette.white, fontSize: 17 },

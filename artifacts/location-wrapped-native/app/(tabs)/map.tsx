@@ -1,3 +1,3 @@
-import { MapScreen } from '@/components/LocationWrapped';
+import MapScreen from '@/components/PlacesMap';
 
 export default MapScreen;
