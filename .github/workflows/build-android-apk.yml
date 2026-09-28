@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Align Expo dependencies
+        run: pnpm --dir artifacts/location-wrapped-native exec expo install --fix --pnpm
+
       - name: Generate native Android project
         env:
           CI: "1"
