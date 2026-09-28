@@ -2,3 +2,5 @@
 - [Expo background tracking](expo-background-tracking.md) — task registration must load before Router; Expo Go cannot verify background collection, so use a development build.
 - [Expo workspace packages](expo-workspace-packages.md) — generic package installation targets the monorepo root; target the mobile workspace package explicitly.
 - [Private map tiles](private-map-tiles.md) — real location map tiles are opt-in because third-party tile requests disclose the viewed geographic area.
+- [Wrapped sharing privacy](wrapped-sharing-privacy.md) — real top-place exports hide all place names; even apparently public names may identify sensitive visits.
+- [Expo media saving](expo-media-saving.md) — SDK 57's typed legacy photo-save function throws at runtime; use the supported asset API.

@@ -123,7 +123,7 @@ export default function MapScreen() {
   const [zoom, setZoom] = useState(12);
   const [selected, setSelected] = useState<MapPlace | null>(null);
   const [expandedCluster, setExpandedCluster] = useState<MapPlace[] | null>(null);
-  const [tileErrors, setTileErrors] = useState<Set<string>>(() => new Set());
+  const [tileFailed, setTileFailed] = useState(false);
   const [showStreetMap, setShowStreetMap] = useState(false);
   const gestureStart = useRef<{ center: MapCenter; zoom: number } | null>(null);
   const mapRef = useRef({ center, zoom, width: mapSize.width, height: mapSize.height });
@@ -197,12 +197,7 @@ export default function MapScreen() {
     if (zoom < MAX_ZOOM) zoomAt(Math.min(MAX_ZOOM, zoom + 2), { lat: group.lat, lng: group.lng });
     else setExpandedCluster(group.places);
   };
-  const onTileError = (key: string) => setTileErrors(current => {
-    if (current.has(key)) return current;
-    const next = new Set(current);
-    next.add(key);
-    return next;
-  });
+  const onTileError = () => setTileFailed(true);
   const closeDetails = () => {
     setSelected(null);
     setExpandedCluster(null);
@@ -245,7 +240,7 @@ export default function MapScreen() {
                 <Image
                   key={tile.key}
                   source={{ uri: tile.uri }}
-                  onError={() => onTileError(tile.key)}
+                  onError={onTileError}
                   resizeMode="stretch"
                   style={[styles.tile, { left: tile.left, top: tile.top }]}
                 />
@@ -254,8 +249,8 @@ export default function MapScreen() {
           ) : (
             <View pointerEvents="none" style={styles.noMap}>
               <Ionicons name="navigate-outline" size={25} color={colors.mutedForeground} />
-              <Text style={styles.noMapTitle}>Your atlas starts here.</Text>
-              <Text style={styles.noMapCopy}>A geographic view will appear when a visit forms a place.</Text>
+               <Text style={styles.noMapTitle}>{!state.ready ? 'Loading your atlas…' : state.error && state.status === 'unavailable' ? 'Your atlas is unavailable.' : 'Your atlas starts here.'}</Text>
+               <Text style={styles.noMapCopy}>{!state.ready ? 'Checking your saved places.' : state.error && state.status === 'unavailable' ? state.error : state.records.length ? 'Location points are saved. Places will appear when those points form meaningful visits.' : 'A geographic view will appear when a visit forms a place.'}</Text>
             </View>
           )}
 
@@ -342,7 +337,7 @@ export default function MapScreen() {
               <Text style={styles.attributionText}> contributors</Text>
             </View>
           ) : null}
-          {center && (demo || showStreetMap) && tileErrors.size > 0 ? (
+           {center && (demo || showStreetMap) && tileFailed ? (
             <View pointerEvents="none" style={[styles.tileNotice, { backgroundColor: 'rgba(11,11,20,0.88)' }]}>
               <Text style={styles.tileNoticeText}>Map tiles may be offline. Place locations are still available.</Text>
             </View>
@@ -353,7 +348,7 @@ export default function MapScreen() {
             <Text style={[styles.privateMapText, { color: colors.mutedForeground }]}>
               {showStreetMap ? 'Street map is on. Map tile requests share the viewed area with OpenStreetMap; your recorded points and visits are not sent.' : 'Place markers are positioned by their real coordinates. Street tiles are off by default to keep your viewed areas private.'}
             </Text>
-            <Pressable accessibilityRole="button" testID="button-toggle-street-map" onPress={() => setShowStreetMap(current => !current)}>
+            <Pressable accessibilityRole="button" testID="button-toggle-street-map" onPress={() => { setTileFailed(false); setShowStreetMap(current => !current); }} style={{ minHeight: 44, justifyContent: 'center' }}>
               <Text style={[styles.privateMapAction, { color: colors.lime }]}>{showStreetMap ? 'Hide street map' : 'Load street map'}</Text>
             </Pressable>
           </View>
@@ -390,8 +385,8 @@ export default function MapScreen() {
           )) : (
             <View style={[styles.emptyCard, { backgroundColor: colors.card }]}>
               <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}><Ionicons name="navigate-outline" size={20} color={colors.lime} /></View>
-              <Text style={styles.emptyTitle}>No observed places yet.</Text>
-              <Text style={styles.smallMuted}>A place appears here after recorded locations form a visit. Sample places are kept separate from your personal history.</Text>
+              <Text style={styles.emptyTitle}>{!state.ready ? 'Loading your places…' : 'No observed places yet.'}</Text>
+              <Text style={styles.smallMuted}>{!state.ready ? 'Checking saved visit history.' : state.records.length ? 'Your location points are saved, but none formed a meaningful visit yet. Keep tracking when it works for you.' : 'A place appears here after recorded locations form a visit. Sample places are kept separate from your personal history.'}</Text>
             </View>
           )}
         </View>

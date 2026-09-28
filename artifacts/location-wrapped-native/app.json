@@ -15,20 +15,46 @@
       }
     },
     "android": {
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION"]
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
-      ["expo-location", {
-        "locationWhenInUsePermission": "Location Wrapped records your location while you use the app to build your personal place history.",
-        "locationAlwaysAndWhenInUsePermission": "If you enable background tracking, Location Wrapped records your location while the app is closed to build your place history.",
-        "isAndroidBackgroundLocationEnabled": true,
-        "isAndroidForegroundServiceEnabled": true,
-        "isIosBackgroundLocationEnabled": true
-      }]
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Location Wrapped records your location while you use the app to build your personal place history.",
+          "locationAlwaysAndWhenInUsePermission": "If you enable background tracking, Location Wrapped records your location while the app is closed to build your place history.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      "expo-sharing",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": false,
+          "savePhotosPermission": "Allow Location Wrapped to save your previewed Wrapped card to Photos.",
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

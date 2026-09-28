@@ -20,6 +20,8 @@ import { nativePalette } from '@/constants/colors';
 import { useLocation } from '@/context/LocationContext';
 import { useColors } from '@/hooks/useColors';
 import { generateDemoWrapped, generateWrapped, type WrappedCard, type WrappedTheme } from '@/services/wrappedGenerator';
+import { buildShareContent, buildShareSvg, shouldKeepSharePreview, type ShareCardContent } from '@/services/shareContent';
+import WrappedShareCard, { type WrappedShareCardHandle } from '@/components/WrappedShareCard';
 
 type StoryMode = 'real' | 'demo';
 type Theme = { gradient: readonly [string, string, string]; foreground: string; accent: string; muted: string };
@@ -32,6 +34,39 @@ const themes: Record<WrappedTheme, Theme> = {
 };
 
 const totalCards = 10;
+
+async function renderWebPng(content: ShareCardContent): Promise<Blob> {
+  const svgBlob = new Blob([buildShareSvg(content)], { type: 'image/svg+xml;charset=utf-8' });
+  const svgUrl = URL.createObjectURL(svgBlob);
+  try {
+    const image = new Image();
+    image.src = svgUrl;
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('The share preview could not be rendered. Try again.'));
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1350;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('PNG export is unavailable in this browser.');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const png = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!png) throw new Error('The PNG image could not be created. Try again.');
+    return png;
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
+
+function downloadWebPng(blob: Blob, kind: ShareCardContent['kind']) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `location-wrapped-${kind}.png`;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
 
 function Eyebrow({ children, color }: { children: React.ReactNode; color: string }) {
   return <Text style={[styles.eyebrow, { color }]}>{children}</Text>;
@@ -92,7 +127,12 @@ export default function WrappedExperience() {
   const [storyMode, setStoryMode] = useState<StoryMode | null>(null);
   const [index, setIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [sharePreview, setSharePreview] = useState<ShareCardContent | null>(null);
+  const [shareSource, setShareSource] = useState<WrappedCard | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareError, setShareError] = useState('');
   const transition = useRef(new Animated.Value(1)).current;
+  const shareCardRef = useRef<WrappedShareCardHandle>(null);
   const shifting = useRef(false);
   const firstPlay = useRef(false);
   const modeRef = useRef<StoryMode | null>(null);
@@ -105,6 +145,68 @@ export default function WrappedExperience() {
   const theme = themes[card.theme];
   const isDemo = storyMode === 'demo';
   const hasVisits = state.visits.length > 0;
+
+  const openSharePreview = useCallback(() => {
+    const content = buildShareContent(card, isDemo ? 'demo' : 'real');
+    if (!content) return;
+    setShareError('');
+    setSharePreview(content);
+    setShareSource(card);
+  }, [card, isDemo]);
+
+  const saveShareImage = useCallback(async () => {
+    if (!sharePreview || shareBusy) return;
+    setShareBusy(true);
+    setShareError('');
+    try {
+      if (Platform.OS === 'web') {
+        downloadWebPng(await renderWebPng(sharePreview), sharePreview.kind);
+        return;
+      }
+      const uri = await shareCardRef.current?.capture();
+      if (!uri) throw new Error('The share-card preview is not ready yet. Try again.');
+      const MediaLibrary = await import('expo-media-library');
+      const permission = await MediaLibrary.requestPermissionsAsync(true);
+      if (!permission.granted) throw new Error('Photo access was not allowed. You can enable it in Settings and try again.');
+      await MediaLibrary.Asset.create(uri);
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : 'The image could not be saved. Try again.');
+    } finally {
+      setShareBusy(false);
+    }
+  }, [shareBusy, sharePreview]);
+
+  const shareImage = useCallback(async () => {
+    if (!sharePreview || shareBusy) return;
+    setShareBusy(true);
+    setShareError('');
+    try {
+      if (Platform.OS === 'web') {
+        const png = await renderWebPng(sharePreview);
+        const navigatorWithFiles = navigator as Navigator & {
+          canShare?: (data: { files: File[] }) => boolean;
+          share?: (data: ShareData) => Promise<void>;
+        };
+        const file = new File([png], `location-wrapped-${sharePreview.kind}.png`, { type: 'image/png' });
+        if (navigatorWithFiles.share && navigatorWithFiles.canShare?.({ files: [file] })) {
+          await navigatorWithFiles.share({ files: [file], title: sharePreview.title });
+        } else {
+          downloadWebPng(png, sharePreview.kind);
+          setShareError('Image sharing is not available here, so the PNG was downloaded instead.');
+        }
+        return;
+      }
+      const uri = await shareCardRef.current?.capture();
+      if (!uri) throw new Error('The share-card preview is not ready yet. Try again.');
+      const Sharing = await import('expo-sharing');
+      if (!(await Sharing.isAvailableAsync())) throw new Error('Image sharing is not available on this device.');
+      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share your Wrapped', UTI: 'public.png' });
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : 'The share sheet could not be opened. Try again.');
+    } finally {
+      setShareBusy(false);
+    }
+  }, [shareBusy, sharePreview]);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
@@ -132,6 +234,16 @@ export default function WrappedExperience() {
     }
     if (play !== '1') firstPlay.current = false;
   }, [play, state.ready, state.mode, hasVisits, start]);
+
+  useEffect(() => {
+    if (!sharePreview) return;
+    const previewMode = sharePreview.sample ? 'demo' : 'real';
+    if (!shouldKeepSharePreview(previewMode, storyMode, state.mode, hasVisits, shareSource === card)) {
+      setSharePreview(null);
+      setShareSource(null);
+      setShareError('');
+    }
+  }, [card, hasVisits, sharePreview, shareSource, state.mode, storyMode]);
 
   const close = useCallback(() => {
     transition.stopAnimation();
@@ -226,7 +338,14 @@ export default function WrappedExperience() {
             </View>
             <View style={styles.storyHeader}>
               <Eyebrow color={theme.foreground}>{isDemo ? 'LOCATION WRAPPED  /  DEMO STORY' : 'LOCATION WRAPPED  /  YOUR STORY'}</Eyebrow>
-              <Pressable accessibilityRole="button" accessibilityLabel="Close Wrapped" testID="button-close-wrapped" hitSlop={14} onPress={close} style={styles.closeButton}><Feather name="x" size={24} color={theme.foreground} /></Pressable>
+              <View style={styles.headerActions}>
+                {card.kind === 'summary' || card.kind === 'top' ? (
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Preview ${card.kind === 'summary' ? 'year summary' : 'top places'} share card`} testID={`button-preview-share-${card.kind}`} hitSlop={10} onPress={openSharePreview} style={styles.shareStoryButton}>
+                    <Feather name="share" size={18} color={theme.foreground} />
+                  </Pressable>
+                ) : null}
+                <Pressable accessibilityRole="button" accessibilityLabel="Close Wrapped" testID="button-close-wrapped" hitSlop={14} onPress={close} style={styles.closeButton}><Feather name="x" size={24} color={theme.foreground} /></Pressable>
+              </View>
             </View>
             <View style={styles.storyMain} {...pan.panHandlers}>
               <Animated.View pointerEvents="none" style={[styles.storyContent, {
@@ -265,6 +384,44 @@ export default function WrappedExperience() {
           <View pointerEvents="none" style={[styles.decorCircle, { borderColor: `${theme.accent}55` }]} />
         </LinearGradient>
       </Modal>
+      <Modal
+        visible={sharePreview !== null}
+        animationType={reduceMotion ? 'none' : 'slide'}
+        presentationStyle="fullScreen"
+        onRequestClose={() => { setSharePreview(null); setShareSource(null); setShareError(''); }}
+        statusBarTranslucent
+      >
+        <View style={[styles.sharePage, { backgroundColor: colors.background }]}>
+          <SafeAreaView edges={['top']} style={styles.shareTopSafe}>
+            <View style={[styles.shareHeader, { borderBottomColor: colors.border }]}>
+              <View style={styles.shareHeading}>
+                <Eyebrow color={colors.lime}>WRAPPED  /  SHARE PREVIEW</Eyebrow>
+                <Text style={[styles.shareTitle, { color: colors.foreground }]}>{sharePreview?.kind === 'summary' ? 'Year summary' : 'Top places'}</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close share preview" testID="button-close-share-preview" hitSlop={14} onPress={() => { setSharePreview(null); setShareSource(null); setShareError(''); }} style={styles.shareClose}>
+                <Feather name="x" size={23} color={colors.foreground} />
+              </Pressable>
+            </View>
+          </SafeAreaView>
+          {sharePreview ? (
+            <ScrollView contentContainerStyle={[styles.shareContent, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 18) + 24 }]} showsVerticalScrollIndicator={false}>
+              <Text style={[styles.sharePrivacyNote, { color: colors.mutedForeground }]}>{sharePreview.sample ? 'Review the image before sharing. This sample card uses fictional demo place names.' : 'Review before sharing: personal place names are hidden as Place 1, Place 2, etc. The card contains no coordinates or addresses.'}</Text>
+              <WrappedShareCard ref={shareCardRef} content={sharePreview} />
+              <View style={styles.shareActions}>
+                <Pressable accessibilityRole="button" testID="button-save-share-image" disabled={shareBusy} onPress={saveShareImage} style={({ pressed }) => [styles.shareActionPrimary, { backgroundColor: colors.lime, opacity: shareBusy ? 0.55 : pressed ? 0.82 : 1 }]}>
+                  <Feather name="download" size={18} color={nativePalette.blueInk} />
+                  <Text style={styles.shareActionPrimaryText}>{shareBusy ? 'Preparing image…' : Platform.OS === 'web' ? 'Download PNG' : 'Save image to Photos'}</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" testID="button-share-image" disabled={shareBusy} onPress={shareImage} style={({ pressed }) => [styles.shareActionSecondary, { borderColor: colors.border, opacity: shareBusy ? 0.55 : pressed ? 0.72 : 1 }]}>
+                  <Feather name="share" size={17} color={colors.foreground} />
+                  <Text style={[styles.shareActionSecondaryText, { color: colors.foreground }]}>{shareBusy ? 'Preparing image…' : 'Share image'}</Text>
+                </Pressable>
+              </View>
+              {shareError ? <Text accessibilityRole="alert" testID="status-share-error" style={[styles.shareError, { color: colors.pink }]}>{shareError}</Text> : null}
+            </ScrollView>
+          ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -300,6 +457,8 @@ const styles = StyleSheet.create({
   progressTrack: { flex: 1, height: 3, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: 3, borderRadius: 3 },
   storyHeader: { minHeight: 62, paddingHorizontal: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  shareStoryButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   closeButton: { width: 40, height: 40, alignItems: 'flex-end', justifyContent: 'center' },
   storyMain: { flex: 1, minHeight: 0 },
   storyContent: { flex: 1, paddingHorizontal: 30, paddingTop: 25, paddingBottom: 25, justifyContent: 'space-between' },
@@ -334,4 +493,18 @@ const styles = StyleSheet.create({
   topName: { fontSize: 15, fontWeight: '800' },
   topDetail: { fontSize: 11, marginTop: 3 },
   emptyTop: { fontSize: 15, lineHeight: 23 },
+  sharePage: { flex: 1, paddingTop: Platform.OS === 'web' ? 67 : 0, paddingBottom: Platform.OS === 'web' ? 34 : 0 },
+  shareTopSafe: { backgroundColor: nativePalette.ink },
+  shareHeader: { minHeight: 68, paddingHorizontal: 22, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  shareHeading: { gap: 2 },
+  shareTitle: { fontFamily: 'Inter_700Bold', fontSize: 19, letterSpacing: -0.4 },
+  shareClose: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  shareContent: { paddingHorizontal: 20, paddingTop: 16, gap: 15 },
+  sharePrivacyNote: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18 },
+  shareActions: { gap: 9, marginTop: 2 },
+  shareActionPrimary: { minHeight: 52, borderRadius: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  shareActionPrimaryText: { color: nativePalette.blueInk, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  shareActionSecondary: { minHeight: 50, borderRadius: 13, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  shareActionSecondaryText: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  shareError: { fontFamily: 'Inter_500Medium', fontSize: 12, lineHeight: 18, textAlign: 'center' },
 });

@@ -77,6 +77,8 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   stateRef.current = state;
   const watch = useRef<Location.LocationSubscription | null>(null);
   const generation = useRef(0);
+  const clearingHistory = useRef(false);
+  const deletionEpoch = useRef(0);
   const appState = useRef(AppState.currentState);
 
   const stopForeground = useCallback(() => {
@@ -93,14 +95,18 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshRecords = useCallback(async () => {
+    const current = generation.current;
     const { records } = await loadHistory();
-    setState(previous => ({ ...previous, ...derive(records) }));
+    if (!clearingHistory.current && current === generation.current) {
+      setState(previous => ({ ...previous, ...derive(records) }));
+    }
   }, []);
 
   const startForeground = useCallback(async (): Promise<boolean> => {
     stopForeground();
     if (Platform.OS === 'web' || appState.current !== 'active') return false;
     const current = generation.current;
+    const epoch = deletionEpoch.current;
     try {
       const subscription = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.Balanced, timeInterval: 60_000, distanceInterval: 35 },
@@ -124,7 +130,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
           setState(previous => ({ ...previous, status: 'inactive', error: readableError(error) }));
         },
       );
-      if (generation.current !== current) { subscription.remove(); return false; }
+      if (generation.current !== current || deletionEpoch.current !== epoch || clearingHistory.current) { subscription.remove(); return false; }
       watch.current = subscription;
       setState(previous => ({ ...previous, status: 'active', error: null }));
       return true;
@@ -135,10 +141,16 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   }, [refreshRecords, stopForeground]);
 
   const startBackground = useCallback(async (): Promise<boolean> => {
+    const epoch = deletionEpoch.current;
     if (Platform.OS === 'web' || !(await TaskManager.isAvailableAsync())) return false;
+    if (clearingHistory.current || deletionEpoch.current !== epoch) return false;
     try {
       if (!(await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK))) {
         await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, taskOptions);
+      }
+      if (clearingHistory.current || deletionEpoch.current !== epoch) {
+        await stopBackground();
+        return false;
       }
       stopForeground();
       setState(previous => ({ ...previous, status: 'active', error: null, backgroundEnabled: true }));
@@ -147,18 +159,23 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       setState(previous => ({ ...previous, backgroundAvailable: false, error: `Background tracking could not start on this build. ${readableError(error)}` }));
       return false;
     }
-  }, [stopForeground]);
+  }, [stopBackground, stopForeground]);
 
   const reconcile = useCallback(async () => {
+    if (clearingHistory.current) return;
+    const epoch = deletionEpoch.current;
+    const stillCurrent = () => !clearingHistory.current && deletionEpoch.current === epoch;
     if (Platform.OS === 'web') {
       const stored = await loadHistory();
-      setState(previous => ({ ...previous, ...derive(stored.records), mode: stored.preferences.mode, ready: true, backgroundAvailable: false }));
+      if (stillCurrent()) setState(previous => ({ ...previous, ...derive(stored.records), mode: stored.preferences.mode, ready: true, backgroundAvailable: false }));
       return;
     }
     const stored = await loadHistory();
+    if (!stillCurrent()) return;
     const available = await TaskManager.isAvailableAsync();
     const permission = await Location.getForegroundPermissionsAsync();
     const servicesOn = await Location.hasServicesEnabledAsync();
+    if (!stillCurrent()) return;
     const prefs = stored.preferences;
     const common = {
       ...derive(stored.records), mode: prefs.mode, ready: true,
@@ -168,13 +185,16 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     if (!prefs.wantedActive || prefs.mode !== 'real') {
       stopForeground();
       await stopBackground();
+      if (!stillCurrent()) return;
       setState(previous => ({ ...previous, ...common, status: prefs.mode === 'real' && previous.status === 'paused' ? 'paused' : prefs.mode === 'real' ? 'paused' : 'inactive', error: null }));
       return;
     }
     if (!permission.granted || !servicesOn) {
       stopForeground();
       await stopBackground();
+      if (!stillCurrent()) return;
       await savePreferences({ ...prefs, wantedActive: false, backgroundEnabled: false });
+      if (!stillCurrent()) return;
       setState(previous => ({
         ...previous, ...common, backgroundEnabled: false, status: !permission.granted ? 'denied' : 'unavailable',
         error: !permission.granted ? 'Location permission was revoked. Enable it in Settings to resume.' : 'Location services are off. Turn them on in Settings to resume.',
@@ -184,14 +204,19 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     setState(previous => ({ ...previous, ...common, status: 'requesting', error: null }));
     if (prefs.backgroundEnabled) {
       const backgroundPermission = await Location.getBackgroundPermissionsAsync();
+      if (!stillCurrent()) return;
       if (available && backgroundPermission.granted && await startBackground()) return;
+      if (!stillCurrent()) return;
       await stopBackground();
+      if (!stillCurrent()) return;
       await savePreferences({ ...prefs, backgroundEnabled: false });
+      if (!stillCurrent()) return;
       setState(previous => ({
         ...previous, backgroundEnabled: false,
         error: 'Background access is unavailable or was revoked. Foreground tracking can continue while the app is open.',
       }));
     }
+    if (!stillCurrent()) return;
     await startForeground();
   }, [startBackground, startForeground, stopBackground, stopForeground]);
 
@@ -307,12 +332,19 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   }, [stopBackground, stopForeground]);
 
   const clearHistory = useCallback(async () => {
+    if (clearingHistory.current) return;
+    clearingHistory.current = true;
+    deletionEpoch.current++;
     stopForeground();
     setState(previous => ({ ...previous, status: 'paused' }));
-    await savePreferences({ mode: stateRef.current.mode, wantedActive: false, backgroundEnabled: false });
-    await stopBackground();
-    await deleteHistory();
-    setState({ ...initialState, ready: true, backgroundAvailable: Platform.OS !== 'web' && await TaskManager.isAvailableAsync() });
+    try {
+      await savePreferences({ mode: stateRef.current.mode, wantedActive: false, backgroundEnabled: false });
+      await stopBackground();
+      await deleteHistory();
+      setState({ ...initialState, ready: true, backgroundAvailable: Platform.OS !== 'web' && await TaskManager.isAvailableAsync() });
+    } finally {
+      clearingHistory.current = false;
+    }
   }, [stopBackground, stopForeground]);
 
   const openSettings = useCallback(async () => {

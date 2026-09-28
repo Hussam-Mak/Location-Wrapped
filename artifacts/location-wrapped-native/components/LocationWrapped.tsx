@@ -6,6 +6,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  ActivityIndicator,
   type StyleProp,
   type TextStyle,
   View,
@@ -102,7 +103,7 @@ function Intro({ label, title, description }: { label: string; title: string; de
 }
 
 function SectionTitle({ children }: { children: string }) {
-  return <Text style={styles.sectionTitle}>{children}</Text>;
+  return <Text accessibilityRole="header" style={styles.sectionTitle}>{children}</Text>;
 }
 
 function PageFrame({ children, mode }: { children: React.ReactNode; mode: string }) {
@@ -128,19 +129,20 @@ function PageFrame({ children, mode }: { children: React.ReactNode; mode: string
 
 function StatusCard() {
   const colors = useColors();
-  const { state } = useLocation();
+  const { state, openSettings } = useLocation();
   const demo = state.mode === 'demo';
   const active = !demo && state.ready && state.status === 'active';
-  const title = demo ? 'Exploring the demo' : active ? 'Tracking is active' : state.status === 'paused' ? 'Tracking is paused' : state.status === 'denied' ? 'Location access denied' : state.status === 'unavailable' ? 'Location is unavailable' : 'Tracking is inactive';
-  const subtitle = demo ? 'Sample places, not your location history.' : active ? state.backgroundEnabled ? 'Location updates can continue when the app is in the background.' : 'Your story is taking shape while this app is open.' : state.status === 'paused' ? 'No new locations are being recorded.' : 'Allow location access to begin your story.';
+  const loading = !demo && !state.ready;
+  const title = demo ? 'Exploring the demo' : loading ? 'Checking your location history' : active ? 'Tracking is active' : state.status === 'paused' ? 'Tracking is paused' : state.status === 'denied' ? 'Location access denied' : state.status === 'unavailable' ? 'Location is unavailable' : 'Tracking is inactive';
+  const subtitle = demo ? 'Sample places, not your location history.' : loading ? 'Loading saved visits and tracking status.' : active ? state.backgroundEnabled ? 'Location updates can continue when the app is in the background.' : 'Your story is taking shape while this app is open.' : state.status === 'paused' ? 'No new locations are being recorded.' : state.status === 'denied' ? 'Location permission is off. You can allow it again in Settings.' : state.status === 'unavailable' ? 'Location services are off. Turn them on in Settings to continue.' : 'Allow location access to begin your story.';
   const last = state.mode === 'real' ? state.records[state.records.length - 1] as RecordLocation | undefined : undefined;
   return (
     <View style={[styles.panel, { backgroundColor: colors.card }]} testID="card-tracking-status">
       <View style={styles.statusTop}>
         <View style={styles.statusLead}>
-          <View style={[styles.statusDot, { backgroundColor: active || demo ? colors.lime : state.status === 'paused' ? colors.orange : colors.mutedForeground }]} />
+          {loading ? <ActivityIndicator size="small" color={colors.lime} accessibilityLabel="Loading tracking status" /> : <View accessible={false} style={[styles.statusDot, { backgroundColor: active || demo ? colors.lime : state.status === 'paused' ? colors.orange : colors.mutedForeground }]} />}
           <View style={styles.statusText}>
-            <Text style={styles.statusTitle} testID="status-tracking">{title}</Text>
+            <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={styles.statusTitle} testID="status-tracking">{title}</Text>
             <Text style={styles.bodyMuted}>{subtitle}</Text>
           </View>
         </View>
@@ -149,16 +151,24 @@ function StatusCard() {
       <View style={[styles.statusStats, { borderTopColor: colors.border }]}>
         <View style={styles.statusStat}>
           <Text style={styles.smallMuted}>Last location recorded</Text>
-          <Text style={styles.statusValue} testID="text-last-location">{demo ? 'Demo only' : last ? formatCoordinates(last.lat, last.lng) : 'Not yet recorded'}</Text>
+          <Text style={styles.statusValue} testID="text-last-location">{demo ? 'Demo only' : last ? 'Recorded' : 'Not yet recorded'}</Text>
         </View>
         <View style={styles.statusStat}>
           <Text style={styles.smallMuted}>Last update</Text>
           <Text style={styles.statusValue} testID="text-last-update">{demo ? 'Not tracking' : prettyTime(state.lastUpdate)}</Text>
         </View>
       </View>
-      {!demo && state.error ? <Text accessibilityRole="alert" style={styles.errorText}>{state.error}</Text> : null}
-      {!demo && ['inactive', 'denied', 'unavailable'].includes(state.status) ? (
-        <Pressable testID="button-enable-from-status" onPress={() => router.push('/onboarding/3')} style={styles.textLink}>
+      {!demo && state.error ? <Text accessibilityRole="alert" testID="status-location-error" style={styles.errorText}>{state.error}</Text> : null}
+      {!demo && state.ready && state.status === 'paused' ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Resume tracking" accessibilityHint="Open tracking controls in Profile." testID="button-resume-from-status" onPress={() => router.push('/(tabs)/profile')} style={styles.textLink}>
+          <Text style={{ color: colors.lime, fontWeight: '700' }}>Resume tracking</Text><Feather name="arrow-right" size={16} color={colors.lime} />
+        </Pressable>
+      ) : !demo && state.ready && state.status === 'denied' && !state.canAskAgain ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Open location settings" testID="button-enable-from-status" onPress={() => { void openSettings(); }} style={styles.textLink}>
+          <Text style={{ color: colors.lime, fontWeight: '700' }}>Open location Settings</Text><Feather name="arrow-right" size={16} color={colors.lime} />
+        </Pressable>
+      ) : !demo && state.ready && ['inactive', 'denied', 'unavailable'].includes(state.status) ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Enable location tracking" testID="button-enable-from-status" onPress={() => router.push('/onboarding/3')} style={styles.textLink}>
           <Text style={{ color: colors.lime, fontWeight: '700' }}>Enable location tracking</Text><Feather name="arrow-right" size={16} color={colors.lime} />
         </Pressable>
       ) : null}
@@ -191,6 +201,19 @@ function EmptyCard({ title, children, action }: { title: string; children: strin
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.bodyMuted}>{children}</Text>
       {action}
+    </View>
+  );
+}
+
+function LoadingCard({ title, copy }: { title: string; copy: string }) {
+  const colors = useColors();
+  return (
+    <View style={[styles.panel, styles.loadingCard, { backgroundColor: colors.card }]} accessibilityRole="summary" accessibilityLabel={`${title}. ${copy}`} testID="card-loading">
+      <ActivityIndicator color={colors.lime} />
+      <View style={styles.loadingCopy}>
+        <Text style={styles.emptyTitle}>{title}</Text>
+        <Text style={styles.bodyMuted}>{copy}</Text>
+      </View>
     </View>
   );
 }
@@ -243,6 +266,7 @@ export function OnboardingScreen() {
   const [pending, setPending] = useState(false);
   const [permissionError, setPermissionError] = useState(false);
   const denied = state.status === 'denied' || state.status === 'unavailable';
+  const mustOpenSettings = state.status === 'denied' && !state.canAskAgain;
   const stepColor = step === 2 ? colors.pink : step === 3 ? colors.primary : colors.lime;
 
   useEffect(() => {
@@ -277,14 +301,17 @@ export function OnboardingScreen() {
         {step === 3 ? (
           <>
             <Text style={styles.note}><Text style={styles.noteStrong}>Your choice: </Text>Tracking starts with foreground location while the app is open. Afterward, you can separately opt in to background updates in Profile where supported. Past location history is never imported.</Text>
-            {denied || permissionError ? (
+            {!state.ready ? <LoadingCard title="Checking location permission" copy="The permission prompt will be available as soon as your tracking status is loaded." /> : null}
+            {state.ready && (denied || permissionError) ? (
               <View style={styles.alert} testID="status-permission-denied">
-                <Text style={styles.alertText}>{state.status === 'unavailable' ? 'Location is not available on this device. Check that location services are enabled, then try again.' : 'Location access was not allowed. You can enable it in Settings and try again, or explore the demo instead.'}</Text>
-                {state.status === 'denied' && !state.canAskAgain ? <PrimaryButton title="Open Settings" icon="settings" variant="secondary" testID="button-open-settings" onPress={() => { try { openSettings(); } catch { setPermissionError(true); } }} /> : null}
+                <Text accessibilityRole="alert" style={styles.alertText}>{state.status === 'unavailable' ? 'Location is not available on this device. Check that location services are enabled, then try again.' : mustOpenSettings ? 'Location access is off for this app. Open Settings to allow access, then return here.' : 'Location access was not allowed. You can try again, or explore the demo instead.'}</Text>
               </View>
             ) : null}
-            <PrimaryButton title={pending || state.status === 'requesting' ? 'Requesting access…' : denied ? 'Try Location Access Again' : 'Allow Location Access'} icon={pending ? undefined : 'arrow-right'} testID="button-allow-location" disabled={pending || state.status === 'requesting'} onPress={allow} wide />
-            {denied || permissionError ? <PrimaryButton title="Try Demo" icon="chevron-right" variant="secondary" testID="button-demo-after-denial" onPress={() => { startDemo(); router.replace('/(tabs)'); }} wide /> : null}
+            {!state.ready ? <View style={styles.loadingCard} testID="status-location-permission-loading"><ActivityIndicator color={colors.lime} /><Text style={styles.bodyMuted}>Checking location permission…</Text></View> : null}
+            {mustOpenSettings ? <PrimaryButton title="Open Settings" icon="settings" variant="secondary" testID="button-open-settings" onPress={() => { void openSettings(); }} wide /> : (
+              <PrimaryButton title={pending || state.status === 'requesting' ? 'Requesting access…' : denied ? 'Try Location Access Again' : 'Allow Location Access'} icon={pending ? undefined : 'arrow-right'} testID="button-allow-location" disabled={!state.ready || pending || state.status === 'requesting'} onPress={allow} wide />
+            )}
+            {state.ready && (denied || permissionError) ? <PrimaryButton title="Try Demo" icon="chevron-right" variant="secondary" testID="button-demo-after-denial" onPress={() => { startDemo(); router.replace('/(tabs)'); }} wide /> : null}
           </>
         ) : null}
       </ScrollView>
@@ -318,7 +345,9 @@ export function HomeScreen() {
       <Intro label={demo ? 'DEMO / SAMPLE HISTORY' : 'YOUR STORY / IN PROGRESS'} title={demo ? 'A year in places.' : state.places.length ? 'Your year in places.' : 'Your story starts here.'} description={demo ? 'An example of what your location story could look like.' : state.places.length ? 'The moments you chose to record, told in places.' : 'Every visit starts with a single moment.'} />
       <SectionTitle>Tracking</SectionTitle>
       <StatusCard />
-      {demo ? (
+      {!demo && !state.ready ? (
+        <LoadingCard title="Loading your history" copy="Checking your saved visits and preparing your dashboard." />
+      ) : demo ? (
         <>
           <View style={styles.sectionBlock}>
             <SectionTitle>The little details</SectionTitle>
@@ -354,6 +383,8 @@ export function HomeScreen() {
               </View>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={state.statistics.mostVisitedPlace ? `View most visited place, ${placeTitle(state.statistics.mostVisitedPlace)}, ${state.statistics.mostVisitedPlace.visitCount} visits` : 'No visits yet'}
+                accessibilityHint={state.statistics.mostVisitedPlace ? 'Opens this place in the map.' : undefined}
                 disabled={!state.statistics.mostVisitedPlace}
                 testID="button-home-most-visited"
                 onPress={() => {
@@ -377,7 +408,7 @@ export function HomeScreen() {
             {state.places.length ? (
               <View style={[styles.statsCard, { backgroundColor: colors.card, borderRadius: 18, paddingHorizontal: 20 }]}>
                 {state.statistics.topPlaces.slice(0, 5).map((place, index) => (
-                  <Pressable key={place.id} testID={`row-top-place-${index}`} onPress={() => router.push({ pathname: '/(tabs)/map', params: { place: place.id } })} style={[styles.placeRow, { borderBottomColor: colors.border }]}>
+                  <Pressable key={place.id} accessibilityRole="button" accessibilityLabel={`View ${placeTitle(place, index)}, ${place.visitCount} visits`} accessibilityHint="Opens this place on the map." testID={`row-top-place-${index}`} onPress={() => router.push({ pathname: '/(tabs)/map', params: { place: place.id } })} style={[styles.placeRow, { borderBottomColor: colors.border }]}>
                     <View style={styles.placeText}>
                       <Text style={styles.placeName}>{placeTitle(place, index)}</Text>
                       <Text style={styles.smallMuted}>{place.visitCount} {place.visitCount === 1 ? 'visit' : 'visits'} · {formatDuration(place.totalTimeMs)} observed</Text>
@@ -387,15 +418,20 @@ export function HomeScreen() {
                 ))}
               </View>
             ) : (
-              <EmptyCard title="The map begins with you." action={<PrimaryButton title="View your map" icon="arrow-right" variant="secondary" testID="button-view-map" onPress={() => router.push('/(tabs)/map')} />}>
-                No processed visits yet. Recorded GPS points are shown separately and do not count as places or visits.
+              <EmptyCard
+                title={state.records.length ? 'No places detected yet.' : 'The map begins with your first visit.'}
+                action={<PrimaryButton title={state.records.length ? 'Review your map' : 'View your map'} icon="arrow-right" variant="secondary" testID="button-view-map" onPress={() => router.push('/(tabs)/map')} />}
+              >
+                {state.records.length
+                  ? `${state.records.length} recorded location points have not formed a meaningful visit yet. Places appear after location samples meet the visit rules; GPS points never count as places by themselves.`
+                  : 'No location history has been recorded yet. Start tracking to collect visits; recorded GPS points are not places by themselves.'}
               </EmptyCard>
             )}
-            <View style={[styles.panel, { backgroundColor: colors.card, marginTop: 14 }]} testID="card-raw-point-count">
+            <View style={[styles.panel, { backgroundColor: colors.card, marginTop: 14 }]} accessibilityRole="summary" accessibilityLabel={`${state.records.length} raw location points`} testID="card-raw-point-count">
               <Label style={{ color: colors.lime }}>RAW LOCATION POINTS</Label>
               <Text style={[styles.statusTitle, { marginTop: 9 }]} testID="text-raw-point-count">{state.records.length}</Text>
               <Text style={styles.bodyMuted}>Recorded coordinates are separate from processed places and visits.</Text>
-              <Pressable onPress={() => router.push('/(tabs)/map')} testID="button-view-raw-points" style={styles.textLink}>
+              <Pressable accessibilityRole="button" accessibilityLabel="View recorded GPS points on map" accessibilityHint="Opens the map and raw location history." onPress={() => router.push('/(tabs)/map')} testID="button-view-raw-points" style={styles.textLink}>
                 <Text style={{ color: colors.lime, fontWeight: '700' }}>View raw points on map</Text><Feather name="arrow-right" size={16} color={colors.lime} />
               </Pressable>
             </View>
@@ -417,10 +453,10 @@ function WrappedTeaser({ demo = false }: { demo?: boolean }) {
   return (
     <View style={[styles.teaser, { backgroundColor: nativePalette.wrappedCard }]}>
       <Label style={{ color: colors.pink }}>{demo ? 'WRAPPED / DEMO STORY' : 'YOUR STORY / LOCATION WRAPPED'}</Label>
-      <Text style={styles.teaserTitle}>{demo ? 'A sample story in ten moments.' : hasHistory ? 'Your Wrapped is ready.' : 'Your Wrapped starts with a visit.'}</Text>
-      <Text style={styles.teaserCopy}>{demo ? 'See how the places you return to become a story worth keeping.' : hasHistory ? 'See the year told by your real observed places and visits.' : 'Your own history will build here. Until then, explore a clearly labeled sample in Wrapped.'}</Text>
-      <View style={[styles.progressTrack, { backgroundColor: nativePalette.progressTrack }]}><View style={[styles.progressFill, { backgroundColor: colors.pink }]} /></View>
-      <Pressable onPress={() => router.push('/(tabs)/wrapped')} testID="button-preview-wrapped" style={styles.textLink}><Text style={{ color: colors.lime, fontWeight: '700' }}>{demo ? 'Explore demo Wrapped' : hasHistory ? 'Explore your Wrapped' : 'Open Wrapped'}</Text><Feather name="arrow-right" size={16} color={colors.lime} /></Pressable>
+      <Text style={styles.teaserTitle}>{demo ? 'A sample story in ten moments.' : hasHistory ? 'Your Wrapped is ready.' : 'Your Wrapped is still building.'}</Text>
+      <Text style={styles.teaserCopy}>{demo ? 'See how the places you return to become a story worth keeping.' : hasHistory ? 'See the year told by your real observed places and visits.' : state.records.length ? 'Your recorded moments have not formed a visit yet. You can keep tracking or preview a clearly labeled sample.' : 'Your own story unlocks after your first observed visit. Until then, preview an explicitly labeled sample.'}</Text>
+      <View style={[styles.progressTrack, { backgroundColor: nativePalette.progressTrack }]} accessibilityLabel={hasHistory || demo ? 'Wrapped ready' : 'Wrapped is still building'}><View style={[styles.progressFill, { backgroundColor: colors.pink, width: hasHistory || demo ? '100%' : state.records.length ? '12%' : '4%' }]} /></View>
+      <Pressable accessibilityRole="button" accessibilityLabel={demo ? 'Explore demo Wrapped' : hasHistory ? 'Explore your Wrapped' : 'Open Wrapped and preview a demo'} accessibilityHint="Opens the Wrapped story screen." onPress={() => router.push('/(tabs)/wrapped')} testID="button-preview-wrapped" style={styles.textLink}><Text style={{ color: colors.lime, fontWeight: '700' }}>{demo ? 'Explore demo Wrapped' : hasHistory ? 'Explore your Wrapped' : 'Open Wrapped'}</Text><Feather name="arrow-right" size={16} color={colors.lime} /></Pressable>
     </View>
   );
 }
@@ -603,14 +639,20 @@ export function ProfileScreen() {
   const demo = state.mode === 'demo';
   const [confirm, setConfirm] = useState(false);
   const [message, setMessage] = useState('');
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const [controlMessage, setControlMessage] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [backgroundMessage, setBackgroundMessage] = useState('');
+  const [updatingTracking, setUpdatingTracking] = useState(false);
+  const [startingTracking, setStartingTracking] = useState(false);
+  const hasWrappedHistory = state.statistics.totalVisits > 0;
   const realCanToggle = state.mode === 'real' && (state.status === 'active' || state.status === 'paused');
   const toggle = async () => {
     setControlMessage('');
+    setUpdatingTracking(true);
     try { if (state.status === 'active') await pause(); else await resume(); }
     catch { setControlMessage('Could not update tracking. Please try again.'); }
+    finally { setUpdatingTracking(false); }
   };
   const toggleBackground = async () => {
     setBackgroundMessage('');
@@ -630,8 +672,11 @@ export function ProfileScreen() {
     }
   };
   const startTracking = async () => {
+    setStartingTracking(true);
+    setControlMessage('');
     try { await requestAccess(); }
     catch { setControlMessage('Could not start tracking. Check your location permissions and try again.'); }
+    finally { setStartingTracking(false); }
   };
   const openLocationSettings = async () => {
     setControlMessage('');
@@ -640,11 +685,13 @@ export function ProfileScreen() {
   };
   const erase = async () => {
     setDeleting(true);
+    setDeleteFailed(false);
     try {
       await clearHistory();
       setConfirm(false);
       setMessage('Your location history has been deleted from this device.');
     } catch {
+      setDeleteFailed(true);
       setMessage('Could not delete saved history. Please try again.');
     } finally {
       setDeleting(false);
@@ -653,7 +700,7 @@ export function ProfileScreen() {
   return (
     <PageFrame mode={state.mode}>
       <Intro label="YOUR SPACE / SETTINGS" title="Your space." description="Your location story belongs to you. You're always in control." />
-      {message ? <Text accessibilityRole="alert" testID="status-delete-success" style={styles.success}>{message}</Text> : null}
+      {message ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" testID={deleteFailed ? 'status-delete-error' : 'status-delete-success'} style={deleteFailed ? styles.errorText : styles.success}>{message}</Text> : null}
       <SectionTitle>Tracking</SectionTitle>
       <StatusCard />
       <View style={styles.sectionBlock}>
@@ -661,9 +708,9 @@ export function ProfileScreen() {
         <View style={[styles.settingsList, { borderTopColor: colors.border }]}>
           {demo ? <SettingRow title="Start your own story" copy="Enable location access and leave the sample behind." icon="arrow-right" testID="button-start-real-tracking" onPress={() => router.push('/onboarding/1')} /> : (
             realCanToggle ? (
-              <SettingRow title={state.status === 'active' ? 'Pause tracking' : 'Resume tracking'} copy={state.status === 'active' ? 'Stop recording new locations for now.' : 'Start recording again while this app is open.'} icon={state.status === 'active' ? 'pause' : 'play'} testID="button-toggle-tracking" onPress={toggle} />
+              <SettingRow title={updatingTracking ? 'Updating tracking…' : state.status === 'active' ? 'Pause tracking' : 'Resume tracking'} copy={state.status === 'active' ? 'Stop recording new locations for now.' : 'Start recording again while this app is open.'} icon={state.status === 'active' ? 'pause' : 'play'} testID="button-toggle-tracking" disabled={updatingTracking} onPress={toggle} />
             ) : (
-              <SettingRow title="Start tracking" copy={state.status === 'denied' ? 'Request location access again to begin recording.' : state.status === 'unavailable' ? 'Check device location services, then try again.' : 'Allow foreground location to begin recording your own history.'} icon="navigation" testID="button-start-tracking" onPress={() => { void startTracking(); }} />
+              <SettingRow title={startingTracking ? 'Requesting location access…' : 'Start tracking'} copy={state.status === 'denied' ? 'Request location access again to begin recording.' : state.status === 'unavailable' ? 'Check device location services, then try again.' : 'Allow foreground location to begin recording your own history.'} icon="navigation" testID="button-start-tracking" disabled={startingTracking} onPress={() => { void startTracking(); }} />
             )
           )}
           {!demo && state.status === 'denied' && !state.canAskAgain ? <SettingRow title="Open location Settings" copy="Location access is denied. Enable it in your device settings to continue." icon="settings" testID="button-profile-open-settings" onPress={() => { void openLocationSettings(); }} /> : null}
@@ -677,20 +724,26 @@ export function ProfileScreen() {
               onPress={() => { void toggleBackground(); }}
             />
           ) : null}
-          <SettingRow title="Replay demo Wrapped" copy="A preview with sample data, never your history." icon="rotate-ccw" testID="button-replay-demo" onPress={() => router.push('/(tabs)/wrapped?play=1')} />
-          <SettingRow title={demo ? 'Leave demo & clear history' : 'Delete My Location History'} copy={demo ? 'Remove the demo and any stored location records.' : 'Permanently remove your recorded locations from this device.'} icon="trash-2" danger testID="button-delete-history" onPress={() => setConfirm(true)} />
+          <SettingRow
+            title={demo ? 'Replay demo Wrapped' : hasWrappedHistory ? 'Replay your Wrapped' : 'Preview demo Wrapped'}
+            copy={demo ? 'Replay this clearly labeled sample story.' : hasWrappedHistory ? 'Replay your story made from observed visits.' : 'Explore a sample story while your observed history is still building.'}
+            icon="rotate-ccw"
+            testID="button-replay-demo"
+            onPress={() => router.push('/(tabs)/wrapped?play=1')}
+          />
+          <SettingRow title={demo ? 'Leave demo & clear history' : 'Delete My Location History'} copy={demo ? 'Remove the demo and any stored location records.' : 'Permanently remove your recorded locations from this device.'} icon="trash-2" danger testID="button-delete-history" onPress={() => { setMessage(''); setConfirm(true); }} />
         </View>
         {!demo && controlMessage ? <Text accessibilityRole="alert" testID="status-tracking-control" style={[styles.bodyMuted, { marginTop: 12 }]}>{controlMessage}</Text> : null}
         {!demo && backgroundMessage ? <Text accessibilityRole="alert" testID="status-background-tracking" style={[styles.bodyMuted, { marginTop: 12 }]}>{backgroundMessage}</Text> : null}
       </View>
-      <View style={[styles.aboutCard, { backgroundColor: colors.card }]}>
+      <View style={[styles.aboutCard, { backgroundColor: colors.card }]} accessibilityRole="summary" accessibilityLabel="About Location Wrapped">
         <Label style={{ color: colors.lime }}>ABOUT THE APP</Label>
         <Text style={styles.aboutTitle}>About Location Wrapped</Text>
         <Text style={styles.bodyMuted}>Location Wrapped turns observed visits into a story of your year. Foreground tracking begins only when you grant permission. Background updates are a separate, optional opt-in when supported; Expo Go requires a development build for this feature. Past trips are never imported, and place names are not inferred from coordinates. Demo content is always labeled and kept separate from your history.</Text>
       </View>
       <Modal visible={confirm} animationType="slide" transparent onRequestClose={() => setConfirm(false)} statusBarTranslucent>
-        <View style={styles.modalShade}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setConfirm(false)} />
+        <View style={styles.modalShade} accessibilityViewIsModal>
+          <Pressable accessibilityRole="button" accessibilityLabel="Cancel deletion and close confirmation" style={StyleSheet.absoluteFill} onPress={() => setConfirm(false)} />
           <SafeAreaView edges={['bottom']} style={[styles.detailSheet, { backgroundColor: nativePalette.sheet }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHead}>
@@ -712,7 +765,7 @@ export function ProfileScreen() {
 function SettingRow({ title, copy, icon, testID, onPress, disabled, danger }: { title: string; copy: string; icon: React.ComponentProps<typeof Feather>['name']; testID: string; onPress: () => void; disabled?: boolean; danger?: boolean }) {
   const colors = useColors();
   return (
-    <Pressable accessibilityRole="button" disabled={disabled} testID={testID} onPress={onPress} style={({ pressed }) => [styles.settingRow, { borderBottomColor: colors.border }, disabled && styles.disabled, pressed && !disabled && styles.pressed]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${copy}`} accessibilityHint={danger ? 'Opens a confirmation before deleting saved history.' : undefined} disabled={disabled} testID={testID} onPress={onPress} style={({ pressed }) => [styles.settingRow, { borderBottomColor: colors.border }, disabled && styles.disabled, pressed && !disabled && styles.pressed]}>
       <View style={styles.settingCopy}><Text style={[styles.settingTitle, danger && { color: colors.pink }]}>{title}</Text><Text style={styles.smallMuted}>{copy}</Text></View>
       <Feather name={icon} size={19} color={danger ? colors.pink : colors.lime} />
     </Pressable>
@@ -762,7 +815,7 @@ const styles = StyleSheet.create({
   smallMuted: { color: nativePalette.foregroundQuiet, fontFamily: 'Inter_400Regular', fontSize: 11, lineHeight: 16 },
   statusValue: { color: nativePalette.white, fontFamily: 'Inter_500Medium', fontSize: 12, lineHeight: 17, marginTop: 6 },
   errorText: { color: nativePalette.foregroundError, marginTop: 16, fontSize: 13, lineHeight: 19 },
-  textLink: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 17, alignSelf: 'flex-start' },
+  textLink: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, alignSelf: 'flex-start' },
   button: { minHeight: 50, borderRadius: 9, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, alignSelf: 'flex-start' },
   buttonWide: { alignSelf: 'stretch' },
   buttonText: { fontFamily: 'Inter_700Bold', fontSize: 14, letterSpacing: -0.25 },
@@ -771,6 +824,8 @@ const styles = StyleSheet.create({
   emptyCard: { padding: 24 },
   emptyIcon: { height: 46, width: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   emptyTitle: { color: nativePalette.white, fontFamily: 'Inter_700Bold', fontSize: 23, letterSpacing: -1, marginBottom: 8 },
+  loadingCard: { minHeight: 86, flexDirection: 'row', alignItems: 'center', gap: 15, marginTop: 12 },
+  loadingCopy: { flex: 1 },
   sectionBlock: { marginTop: 28 },
   statsCard: { paddingTop: 22 },
   heroNumber: { fontFamily: 'Inter_700Bold', fontSize: 112, lineHeight: 112, letterSpacing: -11, marginLeft: -5, marginTop: 17 },
