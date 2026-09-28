@@ -3,6 +3,7 @@ name: Build iPhone Internal
 on:
   push:
     branches: ['main']
+    if: ${{ startsWith(github.commit_message, '[ios-build]') }}
 
 jobs:
   build_ios:
