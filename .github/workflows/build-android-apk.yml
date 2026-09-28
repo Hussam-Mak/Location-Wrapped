@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "artifacts/location-wrapped-native/**"
+      - "!artifacts/location-wrapped-native/.eas/**"
       - "lib/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
